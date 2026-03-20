@@ -1,0 +1,1 @@
+add_library(lidar_corners_detect SHARED LidarCornersDetect.cpp)

@@ -1,0 +1,1 @@
+add_library(otsu_filter SHARED OtusMuti.cpp)

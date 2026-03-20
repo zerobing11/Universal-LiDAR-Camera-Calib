@@ -1,0 +1,1 @@
+add_library(coarse2fine SHARED Coarse2Fine.cpp)
