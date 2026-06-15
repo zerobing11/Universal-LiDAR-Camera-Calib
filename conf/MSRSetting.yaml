@@ -1,0 +1,15 @@
+#  sim
+  data_path: "/home/CamLidar_cail/data/sim/RSL"
+  img_input: "img"
+  lidar_input: "lidar"
+  origin_corner_uv: [0.05, 0.05]
+  res_path: "/home/CamLidar_cail/data/sim/RSL/Extrinsic.txt"
+  predefined_intrinsic: [832.6493217457707, 0.0, 680.8, 0.0, 832.6493217457707, 512.8, 0.0, 0.0, 1.0]
+  predefined_distortion: [0, 0, 0, 0, 0]
+  checker_row: 5
+  checker_col: 5
+  square_len: 0.2
+  lines_plane_pairs: [[2, 1], [2, 0], [0, 1]]
+  otsu: false
+  extract_ground: false
+  enable_joint_optimize: false

@@ -1,0 +1,18 @@
+#sim
+SortCameraPlanes:
+  corner_detect_threshold: 0.03
+  chessboard_threshold: 1
+
+SortLidarPlanes:
+  wait_enter: false
+  leaf_size: 0.03
+  ground_smoothness_threshold_deg: 3
+  ground_curvature_threshold: 0.5
+  min_points_per_plane: 100
+  neighbor_k: 40
+  smoothness_threshold_deg: 5
+  curvature_threshold: 1
+  plane_orthogonality_threshold_deg: 10
+
+Coarse2Fine:
+  ransac_distance_threshold: 0.02
