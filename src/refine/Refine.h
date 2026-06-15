@@ -22,9 +22,9 @@
 struct LMResult {
     Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
     Eigen::Vector3d t = Eigen::Vector3d::Zero();
-    double k = 1.0;
-    double final_cost = 0.0;
-    int iterations = 0;
+    double k;
+    double final_cost;
+    int iterations;
 };
 //理想棋盘格模型
 struct PerfectCheckerBoard {
@@ -52,6 +52,175 @@ struct PerfectCheckerBoard {
         cell_centroids_growth.assign(rows + 1, std::vector<pcl::PointXYZI>(cols + 1));
         cell_centroids_color.assign(rows + 1, std::vector<double>(cols + 1));
     }
+};
+
+// 旋转向量转旋转矩阵
+Eigen::Matrix3d ExpSO3(const Eigen::Vector3d& w) {
+    double theta = w.norm();
+    if (theta < 1e-9)
+        return Eigen::Matrix3d::Identity();
+    Eigen::Vector3d n = w / theta;
+    Eigen::Matrix3d K;
+    K << 0, -n(2), n(1),
+         n(2), 0, -n(0),
+        -n(1), n(0), 0;
+    return Eigen::Matrix3d::Identity() + std::sin(theta) * K + (1 - std::cos(theta)) * K * K;
+}
+
+double kTwoOverSqrtPi = 1.12837916709551257390;
+double CeresErf(double x) {
+    return std::erf(x);
+}
+template <typename T, int N>
+ceres::Jet<T, N> CeresErf(const ceres::Jet<T, N>& x) {
+    ceres::Jet<T, N> result;
+    //erf直接计算实部
+    result.a = std::erf(x.a);
+    //计算导数
+    const double derivative =
+        kTwoOverSqrtPi * std::exp(-x.a * x.a);
+    result.v = x.v * derivative;
+    return result;
+}
+
+double GetScalar(double x) { return x; }
+template<typename T, int N>
+double GetScalar(const ceres::Jet<T, N>& x) { return x.a; }
+
+// 计算完美棋盘格上，点的理论强度
+template <typename T>
+T CalculatePerfectIntensity(const T& u, const T& v, const T& intensity_world, const T& radius, const PerfectCheckerBoard& board)
+{
+    /*
+     *即使发生了出格子的情况，强度值也不会发生突变！！！
+    */
+    double u_scalar = GetScalar(u);
+    double v_scalar = GetScalar(v);
+    // double intensity_world_scalar = GetScalar(intensity_world);
+    double rect = board.rect;
+
+    // 找到最近的垂直线索引和水平线索引
+    int col_idx = std::round(u_scalar / rect);
+    int row_idx = std::round(v_scalar / rect);
+    //我们只关注内棋盘格，不在内棋盘格内的都返回本身强度
+    int num_rows = static_cast<int>(board.cell_centroids_color.size());
+    int num_cols = static_cast<int>(board.cell_centroids_color[0].size());
+    if (col_idx < 1 || col_idx > num_cols - 1 ||
+        row_idx < 1 || row_idx > num_rows - 1) {
+        return intensity_world;
+    }
+
+    // 获取 2x2 格子区域的格子平均强度
+    const auto& cells = board.cell_centroids_color;
+    double I_BL = cells[row_idx - 1][col_idx - 1];
+    double I_BR = cells[row_idx - 1][col_idx];
+    double I_TL = cells[row_idx][col_idx - 1];
+    double I_TR = cells[row_idx][col_idx];
+
+    // ------------下面就是带导数的部分了------------
+    // 计算点相对于十字中心的偏移
+    T center_u = T(col_idx * rect);
+    T center_v = T(row_idx * rect);
+    T du = u - center_u;
+    T dv = v - center_v;
+
+    // 高斯参数
+    T sigma = radius / T(2); // 假设半径是2sigma
+    T factor = T(1.0) / (sigma * T(1.41421356));
+    //计算四个方向上的权重
+    T erf_u = CeresErf(du * factor);
+    T erf_v = CeresErf(dv * factor);
+    T w_right = T(0.5) * (T(1.0) + erf_u);
+    T w_left  = T(0.5) * (T(1.0) - erf_u);
+    T w_top    = T(0.5) * (T(1.0) + erf_v);
+    T w_bottom = T(0.5) * (T(1.0) - erf_v);
+    //四象限加权求和
+    T intensity =
+        w_left  * w_bottom * T(I_BL) +
+        w_right * w_bottom * T(I_BR) +
+        w_left  * w_top    * T(I_TL) +
+        w_right * w_top    * T(I_TR);
+
+    return intensity;
+}
+
+// 优化的 Cost Functor
+struct CheckerboardCostFunctor {
+    // 构造函数传入观测数据和模型数据
+    CheckerboardCostFunctor(const Eigen::Vector3d& point,
+                            double intensity_world,
+                            double radius,
+                            const PerfectCheckerBoard* board)
+        : point_(point), intensity_world_(intensity_world), radius_(radius), board_(board)
+    {
+        origin_ = board_->basis.origin.cast<double>();
+        u_axis_ = board_->basis.u.cast<double>();
+        v_axis_ = board_->basis.v.cast<double>();
+        plane_ = board_->basis.plane.cast<double>();
+    }
+
+    template <typename T>
+    bool operator()(const T* const rot_vec, const T* const trans, const T* const k_param, T* residual) const {
+        // 1、坐标转换：将最新点云从当前坐标系变换到完美棋盘格坐标系
+        T p_raw[3] = {T(point_[0]), T(point_[1]), T(point_[2])};
+        T p_trans[3];
+        // 将点云从原始雷达系转到最新雷达系
+        ceres::AngleAxisRotatePoint(rot_vec, p_raw, p_trans);
+        p_trans[0] += trans[0];
+        p_trans[1] += trans[1];
+        p_trans[2] += trans[2];
+        // 射线起点应为t(因为点云平移了 t，雷达原点在当前系下也是 t)
+        // 射线方向为 dir = p_trans - t，射线方程为 p(alpha) = t + alpha * dir
+        T dir[3];
+        dir[0] = p_trans[0] - trans[0];
+        dir[1] = p_trans[1] - trans[1];
+        dir[2] = p_trans[2] - trans[2];
+        T plane_n[3] = {T(plane_[0]), T(plane_[1]), T(plane_[2])};
+        T plane_d = T(plane_[3]);
+        // 求射线方程p(alpha)与平面方程和的交点，即将射线方程带入平面方程，得到alpha = -(n*t + d) / (n*dir)
+        T numer = -(plane_n[0] * trans[0] + plane_n[1] * trans[1] + plane_n[2] * trans[2] + plane_d);
+        T denom = plane_n[0] * dir[0] + plane_n[1] * dir[1] + plane_n[2] * dir[2];
+        if (ceres::abs(denom) < T(1e-7)) {
+            residual[0] = T(0.0);
+            return true;
+        }
+        T alpha = numer / denom;
+        T p_proj[3];
+        // 将alpha代入射线方程，得到投影点p_proj
+        p_proj[0] = trans[0] + alpha * dir[0];
+        p_proj[1] = trans[1] + alpha * dir[1];
+        p_proj[2] = trans[2] + alpha * dir[2];
+
+        // 将投影点转换到完美棋盘格平面的坐标系
+        T vec_diff[3];
+        vec_diff[0] = p_proj[0] - T(origin_[0]);
+        vec_diff[1] = p_proj[1] - T(origin_[1]);
+        vec_diff[2] = p_proj[2] - T(origin_[2]);
+        T u_axis_T[3] = {T(u_axis_[0]), T(u_axis_[1]), T(u_axis_[2])};
+        T v_axis_T[3] = {T(v_axis_[0]), T(v_axis_[1]), T(v_axis_[2])};
+        T u_val = vec_diff[0] * u_axis_T[0] + vec_diff[1] * u_axis_T[1] + vec_diff[2] * u_axis_T[2];
+        T v_val = vec_diff[0] * v_axis_T[0] + vec_diff[1] * v_axis_T[1] + vec_diff[2] * v_axis_T[2];
+        // 2、计算完美棋盘格上的理论比值
+        T radius_val = T(radius_) * k_param[0];
+        T radio_perfect = CalculatePerfectIntensity(u_val, v_val, T(intensity_world_), radius_val, *board_);
+        // 3、计算残差
+        residual[0] = radio_perfect - T(intensity_world_);
+        return true;
+    }
+
+    // 观测数据
+    Eigen::Vector3d point_;
+    double intensity_world_;
+    double radius_;
+
+    // 棋盘格信息
+    const PerfectCheckerBoard* board_;
+
+    // 几何信息
+    Eigen::Vector3d origin_;
+    Eigen::Vector3d u_axis_;
+    Eigen::Vector3d v_axis_;
+    Eigen::Vector4d plane_;
 };
 
 class Refine {
