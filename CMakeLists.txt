@@ -13,14 +13,14 @@ set(YAML_LIB "${CMAKE_SOURCE_DIR}/env/yaml-cpp-install/lib/libyaml-cpp.so")
 MESSAGE(STATUS "YAML_CPP_INCLUDE_DIR = ${YAML_CPP_INCLUDE_DIR}")
 MESSAGE(STATUS "YAML_CPP_LIBRARIES = ${YAML_CPP_LIBRARIES}")
 
-
-# 寻找OpenCV库
 find_package( OpenCV REQUIRED )
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
 message(STATUS "OpenCV include directories: ${OpenCV_INCLUDE_DIRS}")
 message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
 message(STATUS "OpenCV source directory: ${OpenCV_SOURCE_DIR}")
+
 find_package(Ceres REQUIRED)
+
 find_package(PCL REQUIRED)
 message(STATUS "PCL include directories: ${PCL_INCLUDE_DIRS}")
 
@@ -61,7 +61,6 @@ add_subdirectory(src/coarse2fine)
 add_subdirectory(src/lidar_corners_detect)
 add_subdirectory(src/camera)
 add_subdirectory(src/refine)
-add_subdirectory(src/refine_plugin)
 
 
 
@@ -74,15 +73,7 @@ target_link_libraries( main_MSR
 		camera
 		${ENV_LIBS}
 )
-add_executable( main_extract_single_planes src/main_extract_single_planes.cpp src/config_helper.cpp)
-target_link_libraries( main_extract_single_planes
-		lidar_sort
-		otsu_filter
-		coarse2fine
-		lidar_corners_detect
-		camera
-		${ENV_LIBS}
-)
+
 
 add_executable( main_SSR src/main_SSR.cpp src/config_helper.cpp)
 target_link_libraries( main_SSR
@@ -94,32 +85,3 @@ target_link_libraries( main_SSR
 		refine
 		${ENV_LIBS}
 )
-add_executable( main_refine_plugin src/refine_plugin.cpp src/config_helper.cpp)
-target_link_libraries( main_refine_plugin
-		refine_plugin
-		${ENV_LIBS}
-)
-
-add_executable( main_loss1 src/main_loss1.cpp)
-target_link_libraries( main_loss1
-        camera
-		${ENV_LIBS}
-)
-
-add_executable( main_loss2 src/main_loss2.cpp)
-target_link_libraries( main_loss2
-		${ENV_LIBS})
-
-add_executable( main_SSR2MSR src/SSR2MSR.cpp)
-target_link_libraries( main_SSR2MSR
-		${ENV_LIBS})
-
-# 三平面估计示例（基于 main_MSR_choi）
-add_executable( choi src/main_choi.cpp src/config_helper.cpp)
-target_link_libraries( choi
-		lidar_sort
-		otsu_filter
-		coarse2fine
-		lidar_corners_detect
-		camera
-		${ENV_LIBS})
