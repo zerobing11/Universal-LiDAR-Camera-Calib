@@ -3,5 +3,5 @@
 
   <node pkg="camera_calibration" type="main_SSR" name="main_SSR" respawn="false" output="screen">
   </node>
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find camera_calibration)/launch/test.rviz" />
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find camera_calibration)/launch/rviz.rviz" />
 </launch>

@@ -3,9 +3,7 @@
 
 #include <vector>
 #include <array>
-#include <memory>
 #include <Eigen/Core>
-#include <Eigen/Geometry>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 

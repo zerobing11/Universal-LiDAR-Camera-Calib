@@ -41,7 +41,9 @@ if [ $# -eq 0 ]; then
             --user "$HOST_UID:$HOST_GID" \
             --network host \
             -e DISPLAY=$DISPLAY \
+            -e QT_QPA_PLATFORM=xcb \
             -e QT_X11_NO_MITSHM=1 \
+            -e LIBGL_ALWAYS_SOFTWARE=1 \
             -e USER=$HOST_USER \
             -e HOME=/home/$HOST_USER \
             -v /tmp/.X11-unix:/tmp/.X11-unix \

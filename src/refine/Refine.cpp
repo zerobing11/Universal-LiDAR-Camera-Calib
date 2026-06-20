@@ -485,6 +485,8 @@ void Refine::computeInverseTransform(const std::array<Eigen::Vector4f, 3>& plane
             pt.x = static_cast<float>(p_new.x());
             pt.y = static_cast<float>(p_new.y());
             pt.z = static_cast<float>(p_new.z());
+            pt.intensity = 50;
+
         }
     }
 
