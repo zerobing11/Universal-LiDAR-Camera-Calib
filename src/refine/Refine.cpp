@@ -1,6 +1,6 @@
 #include "Refine.h"
 #include <Eigen/Dense>
-//计算三平面交线交点
+
 void Refine::ComputePlaneIntersectionInfo(const std::array<Eigen::Vector4f, 3>& planes,
                                        const std::array<std::pair<int, int>, 3>& lines_plane_pairs,
                                        Eigen::Vector3d& intersection_point) {
@@ -30,17 +30,15 @@ void Refine::ComputePlaneIntersectionInfo(const std::array<Eigen::Vector4f, 3>& 
 
     for(int i = 0; i < 3; i++)
     {
-        int plane_a = lines_plane_pairs[i].first;   // line_u 对应的另一个平面
-        int plane_b = lines_plane_pairs[i].second;  // line_v 对应的另一个平面
+        int plane_a = lines_plane_pairs[i].first; 
+        int plane_b = lines_plane_pairs[i].second;
 
         LineEquation line_u, line_v;
 
-        // 计算line_u
         int third_plane_u = 3 - i - plane_a;
         Eigen::Vector3d n_third_u = planes[third_plane_u].head<3>().cast<double>();
         compute_line(planes[i], planes[plane_a], n_third_u, line_u);
 
-        // 计算line_v
         int third_plane_v = 3 - i - plane_b;
         Eigen::Vector3d n_third_v = planes[third_plane_v].head<3>().cast<double>();
         compute_line(planes[i], planes[plane_b], n_third_v, line_v);
@@ -75,7 +73,7 @@ void Refine::buildPlaneBasis(const Eigen::Vector4f& plane,
     basis.plane = plane;
     return;
 }
-//uv系转雷达系
+
 void Refine::transformCheckerBoardToLidarFrame(const PlaneBasis& basis, const std::vector<std::vector<Eigen::Vector2d>>& corners_uv, std::vector<std::vector<pcl::PointXYZI>>& corners) {
     int rows = corners_uv.size();
     int cols = corners_uv[0].size();
@@ -83,7 +81,7 @@ void Refine::transformCheckerBoardToLidarFrame(const PlaneBasis& basis, const st
         corners.assign(rows, std::vector<pcl::PointXYZI>(cols));
     }
 
-    //先行后列
+    // Fill row by row, then column by column.
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
             const auto& uv = corners_uv[r][c];
@@ -114,18 +112,16 @@ bool Refine::splitCorners(const pcl::PointCloud<pcl::PointXYZI>::Ptr& corners_al
     return true;
 }
 
-//计算雷达系下角点坐标
+// Compute checkerboard corner coordinates in the lidar frame.
 void Refine::alignCorners(PlaneBasis& basis,
                           const std::vector<pcl::PointXYZI>& corners_cam2lidar,
                           std::vector<std::vector<pcl::PointXYZI>>& corners)
 {
     std::vector<std::vector<Eigen::Vector2d>> corners_uv(rows_, std::vector<Eigen::Vector2d>(cols_));
-    //计算uv系下标准坐标
     double u0 = origin_corner_uv_.first;
     double v0 = origin_corner_uv_.second;
     for (int r = 0; r < rows_; ++r) {
         for (int c = 0; c < cols_; ++c) {
-            // 按照先行后列的顺序
             double u = u0 + c * square_len_;
             double v = v0 + r * square_len_;
             corners_uv[r][c] = Eigen::Vector2d(u, v);
@@ -137,7 +133,7 @@ void Refine::alignCorners(PlaneBasis& basis,
 
     std::vector<Eigen::Vector2d> src_pts, tgt_pts;
     int count = rows_ * cols_;
-    //初始化两对待对齐点对
+    // Initialize two sets of 2D point pairs to be aligned.
     src_pts.reserve(count);
     tgt_pts.reserve(count);
     Eigen::Vector2d src_center = Eigen::Vector2d::Zero();
@@ -146,10 +142,8 @@ void Refine::alignCorners(PlaneBasis& basis,
     {
         for (int c = 0; c < cols_; ++c)
         {
-            // Src:corners_uv
             Eigen::Vector2d p_src_2d = corners_uv[r][c];
 
-            // Tgt:corners_cam2lidar投影到uv系
             int idx = r * cols_ + c;
             if(idx >= corners_cam2lidar.size()) continue;
 
@@ -164,7 +158,7 @@ void Refine::alignCorners(PlaneBasis& basis,
             tgt_center += p_tgt_2d;
         }
     }
-    //对齐
+    // Align the source and target 2D point sets.
     count = src_pts.size();
     src_center /= static_cast<double>(count);
     tgt_center /= static_cast<double>(count);
@@ -173,7 +167,7 @@ void Refine::alignCorners(PlaneBasis& basis,
     {
         W += (tgt_pts[i] - tgt_center) * (src_pts[i] - src_center).transpose();
     }
-    //SVD分解求2D旋转和平移
+    // Align the source and target 2D point sets.
     Eigen::JacobiSVD<Eigen::Matrix2d> svd(W, Eigen::ComputeFullU | Eigen::ComputeFullV);
     Eigen::Matrix2d U = svd.matrixU();
     Eigen::Matrix2d V = svd.matrixV();
@@ -184,14 +178,12 @@ void Refine::alignCorners(PlaneBasis& basis,
         R_2d = U * V.transpose();
     }
     Eigen::Vector2d t_2d = tgt_center - R_2d * src_center;
-    // 变换并更新 Basis
     Eigen::Vector3d new_origin = origin + t_2d.x() * u_axis + t_2d.y() * v_axis;
     Eigen::Vector3d new_u_axis = R_2d(0, 0) * u_axis + R_2d(1, 0) * v_axis;
     Eigen::Vector3d new_v_axis = R_2d(0, 1) * u_axis + R_2d(1, 1) * v_axis;
     basis.origin = new_origin.cast<float>();
     basis.u = new_u_axis.cast<float>();
     basis.v = new_v_axis.cast<float>();
-    //利用更新完的basis和corners_uv，将corners_uv变换到雷达系下
     transformCheckerBoardToLidarFrame(basis, corners_uv, corners);
 }
 
@@ -205,18 +197,15 @@ Refine::Refine(int rows, int cols, double square_len, const std::pair<double, do
 void Refine::growCorners(PerfectCheckerBoard& board) {
     Eigen::Vector3d u_dir = board.basis.u.cast<double>();
     Eigen::Vector3d v_dir = board.basis.v.cast<double>();
-    // board.corners_growth (rows_ + 2) x (cols_ + 2)
     int rows_new = rows_ + 2;
     int cols_new = cols_ + 2;
     for (int r = 0; r < rows_new; ++r) {
         for (int c = 0; c < cols_new; ++c) {
-             //内部点直接拷贝
              bool is_inner_row = (r >= 1 && r <= rows_new - 2);
              bool is_inner_col = (c >= 1 && c <= cols_new - 2);
              if (is_inner_row && is_inner_col) {
                  board.corners_growth[r][c] = board.corners[r - 1][c - 1];
              }
-            // 边界扩展
             else {
                  int rr = std::max(1, std::min(r, rows_new - 2));
                  int cc = std::max(1, std::min(c, cols_new - 2));
@@ -237,7 +226,6 @@ void Refine::growCorners(PerfectCheckerBoard& board) {
 }
 
 void Refine::computeCellCentroids(PerfectCheckerBoard& board) {
-    // board.cell_centroids_growth(rows_+1, cols_+1)
     for (int r = 0; r < rows_ + 1; ++r) {
         for (int c = 0; c < cols_ + 1; ++c) {
              const auto& p_tl = board.corners_growth[r][c];
@@ -280,7 +268,6 @@ void Refine::computeCellColors(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr&
 
             indices.clear();
             sqr_dists.clear();
-            //找附近radius点云上色
             int found = kdtree.radiusSearch(searchPoint, radius, indices, sqr_dists);
             if (found > 0) {
                 double sum = 0.0;
@@ -294,7 +281,7 @@ void Refine::computeCellColors(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr&
         }
     }
 }
-// 计算入射角写入normal_z，并根据入射角和平均发散角K_deg计算光斑半径写入curvature
+
 void Refine::computeAngleRadiusAndFilter(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
                                 const Eigen::Vector4f& plane,
                                 double K_deg,
@@ -311,13 +298,12 @@ void Refine::computeAngleRadiusAndFilter(pcl::PointCloud<pcl::PointXYZINormal>::
                           static_cast<double>(pt.z));
         const double range = v.norm();
         v /= range;
-        // cos(theta)=|n·v|  n为平面法向，v为点云方向
         double cos_v = std::abs(n.dot(v));
         cos_v = std::max(-1.0, std::min(1.0, cos_v));
         const double ang_deg = std::acos(cos_v) * 180.0 / M_PI;
 
         double curvature = 0.0;
-        // radius = range * K_rad / cos(theta)  range为点云距离，K_rad为平均发散角
+        // radius = range * K_rad / cos(theta); range is the point distance, K_rad is the average beam divergence angle.
         curvature = range * K_rad / cos_v;
         pt.normal_x = 0.0f;
         pt.normal_y = 0.0f;
@@ -325,7 +311,6 @@ void Refine::computeAngleRadiusAndFilter(pcl::PointCloud<pcl::PointXYZINormal>::
         pt.curvature = static_cast<float>(curvature);
     }
 
-    // 过滤normal_z 大于angle_threshold 的点
     auto new_end = std::remove_if(cloud->points.begin(), cloud->points.end(),
         [angle_threshold](const pcl::PointXYZINormal& pt) {
             return pt.normal_z > angle_threshold;
@@ -340,55 +325,40 @@ void Refine::computeAngleRadiusAndFilter(pcl::PointCloud<pcl::PointXYZINormal>::
 void Refine::add(const std::array<Eigen::Vector4f, 3>& planes,
                  const pcl::PointCloud<pcl::PointXYZI>::Ptr& corners_cam2lidar,
                  std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3>& clouds) {
-    //定长
     for (auto& board : perfect_checkerboards) {
         board.resize(rows_, cols_);
-        board.rect = square_len_; //设置棋盘格边长
+        board.rect = square_len_; // Set checkerboard square side length.
     }
-    //计算交线、交点
     Eigen::Vector3d intersection_point;
     ComputePlaneIntersectionInfo(planes,
         lines_plane_pairs_,
         intersection_point//out
         );
-    //角点分离
     std::vector<std::vector<pcl::PointXYZI>> corners_split;
     if (!splitCorners(corners_cam2lidar, corners_split)) {
         cout<<"Split corners failed"<<endl;
         return;
     }
     for (int i = 0; i < 3; ++i) {
-        //构建单面基准坐标系
         buildPlaneBasis(planes[i],
                         line_equations_[i].first,
                         line_equations_[i].second,
                         intersection_point,
                         perfect_checkerboards[i].basis//out
                         );
-        //将标准棋盘角点与corners_cam2lidar进行对齐
         alignCorners(perfect_checkerboards[i].basis, corners_split[i], perfect_checkerboards[i].corners);
-        //角点corners扩成corners_growth
         growCorners(perfect_checkerboards[i]);
-        //cell_centroids_growth质心求解
         computeCellCentroids(perfect_checkerboards[i]);
-        //质心上色
         computeCellColors(clouds[i], perfect_checkerboards[i]);
-        //入射角过滤与计算光斑半径
         computeAngleRadiusAndFilter(clouds[i],planes[i],0.15,70);
-        //更新原点坐标！！！！！！
         perfect_checkerboards[i].basis.origin = {perfect_checkerboards[i].corners_growth[0][0].x,perfect_checkerboards[i].corners_growth[0][0].y, perfect_checkerboards[i].corners_growth[0][0].z};
 
     }
-    //进行优化
     Eigen::Matrix3d R_init = Eigen::Matrix3d::Identity();
     Eigen::Vector3d t_init = Eigen::Vector3d::Zero();
     lm_result_ = OptimizePlanePose(clouds, perfect_checkerboards, R_init, t_init);
-    std::cout << "迭代次数: " << lm_result_.iterations
-    << " 代价: " << lm_result_.final_cost << std::endl;
-    // std::cout << "delta_R: " <<endl<< lm_result_.R << std::endl;
-    // std::cout << "delta_t: " <<endl<< lm_result_.t.transpose() << std::endl;
-    std::cout << "light-spot radius factor k: " << lm_result_.k << std::endl;
-    //变换平面方程和角点质心点云
+    std::cout << "Iterations: " << lm_result_.iterations
+    << "; Loss: " << lm_result_.final_cost << std::endl;
     computeInverseTransform(planes);
 
     return;
@@ -442,7 +412,6 @@ LMResult Refine::OptimizePlanePose(const std::array<pcl::PointCloud<pcl::PointXY
                                    const Eigen::Vector3d& t0) {
     LMResult result;
 
-    // 初始化优化变量：旋转向量 (3维) 和 平移向量 (3维)
     double r_vec[3], t_vec[3];
     double k_val = 3;
     Eigen::AngleAxisd aa(R0);
@@ -451,19 +420,16 @@ LMResult Refine::OptimizePlanePose(const std::array<pcl::PointCloud<pcl::PointXY
     t_vec[0] = t0(0); t_vec[1] = t0(1); t_vec[2] = t0(2);
 
     ceres::Problem problem;
-    // 遍历三个平面点云，将所有残差添加到同一个优化问题中
     for (size_t i = 0; i < 3; ++i) {
         const auto& cloud = clouds[i];
         const auto& board = boards[i];
 
         for (const auto& pt : cloud->points) {
-            // 读取观测信息
             Eigen::Vector3d p(pt.x, pt.y, pt.z);
             double radius = static_cast<double>(pt.curvature);
             double intensity_world = static_cast<double>(pt.intensity);
 
-            // 使用 CheckerboardCostFunctor
-            // <1, 3, 3, 1>: 残差维度 1, 旋转参数 3, 平移参数 3, k参数 1
+            // <1, 3, 3, 1>: 3 rotation parameters, 3 translation parameters, 1 scalar k.
             ceres::CostFunction* cost_function =
                 new ceres::AutoDiffCostFunction<CheckerboardCostFunctor, 1, 3, 3, 1>(
                     new CheckerboardCostFunctor(p, intensity_world, radius, &board));
@@ -472,7 +438,6 @@ LMResult Refine::OptimizePlanePose(const std::array<pcl::PointCloud<pcl::PointXY
         }
     }
 
-    // 配置求解器
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_QR;
     options.max_num_iterations = 100;
@@ -481,7 +446,6 @@ LMResult Refine::OptimizePlanePose(const std::array<pcl::PointCloud<pcl::PointXY
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
 
-    // 获取优化结果
     Eigen::Vector3d r_opt(r_vec[0], r_vec[1], r_vec[2]);
     Eigen::Vector3d t_opt(t_vec[0], t_vec[1], t_vec[2]);
 
@@ -494,17 +458,14 @@ LMResult Refine::OptimizePlanePose(const std::array<pcl::PointCloud<pcl::PointXY
 }
 
 void Refine::computeInverseTransform(const std::array<Eigen::Vector4f, 3>& planes) {
-    // 计算逆变换矩阵
     Eigen::Matrix3d R_inv = lm_result_.R.transpose();
     Eigen::Vector3d t_inv = -R_inv * lm_result_.t;
 
-    // 逆变换平面方程
     for (int pid = 0; pid < 3; ++pid) {
-        // 原平面参数
         Eigen::Vector3d n_orig = planes[pid].head<3>().cast<double>();
         double d_orig = static_cast<double>(planes[pid][3]);
 
-        // 变换平面: n' = R_inv * n, d' = d - n' * t_inv
+        // Transform plane: n' = R_inv * n, d' = d - n' * t_inv.
         Eigen::Vector3d n_new = R_inv * n_orig;
         double d_new = d_orig - n_new.dot(t_inv);
 
@@ -514,7 +475,6 @@ void Refine::computeInverseTransform(const std::array<Eigen::Vector4f, 3>& plane
                             static_cast<float>(d_new);
     }
 
-    // 角点点云逆变换
     pcl::PointCloud<pcl::PointXYZI>::Ptr corners_cloud = GetCornersCloud();
     corners_cloud_refine_.reset(new pcl::PointCloud<pcl::PointXYZI>());
     if (corners_cloud && !corners_cloud->empty()) {
@@ -528,7 +488,6 @@ void Refine::computeInverseTransform(const std::array<Eigen::Vector4f, 3>& plane
         }
     }
 
-    // 质心点云逆变换
     pcl::PointCloud<pcl::PointXYZI>::Ptr centroids_cloud = GetCentroidsCloud();
     centroids_cloud_refine_.reset(new pcl::PointCloud<pcl::PointXYZI>());
     if (centroids_cloud && !centroids_cloud->empty()) {

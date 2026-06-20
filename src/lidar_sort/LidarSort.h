@@ -32,8 +32,6 @@ private:
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud;
     };
 
-    //输入参数
-        //一些区域增长参数
     double leaf_size_;
     int min_points_per_plane_;
     int normal_k_search_;
@@ -43,19 +41,17 @@ private:
     double ground_curvature_threshold_;
     int rg_neighbor_k_;
     bool extract_ground_;
-         //三维标定板验证参数
+
     double centroid_distance_target_;
     double plane_orthogonality_threshold_;
-          //原始场景点云提取参数
+
     double extraction_radius_;
     float dist_threshold_;
 
-    //最后的输出
     std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> final_clouds_;
     std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> all_candidate_planes_;
 
     void ResetFinalClouds();
-    //区域增长算法提取地面平面
     std::vector<pcl::PointIndices> performRegionGrowing(
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
         int min_cluster_size,
@@ -63,7 +59,6 @@ private:
         double smoothness_deg,
         double curvature_thresh) const;
 
-    //提取地面平面
     pcl::PointCloud<pcl::PointXYZI>::Ptr extractGroundPlane(
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
         int min_points,
@@ -72,7 +67,6 @@ private:
         double curvature_thresh,
         pcl::PointCloud<pcl::PointXYZI>::Ptr &non_ground_out) const;
 
-    //提取屋顶平面
     pcl::PointCloud<pcl::PointXYZI>::Ptr extractRoofPlane(
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
         int min_points,
@@ -81,20 +75,17 @@ private:
         double curvature_thresh,
         pcl::PointCloud<pcl::PointXYZI>::Ptr &non_roof_out) const;
 
-    //选择最佳三个平面
     std::vector<PlaneInfo> selectBestThreePlanes(
         const std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &all_planes,
         double target_dist,
         double orthogonality_threshold) const;
 
-    //提取最终点云
     std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> extractFinalPoints(
         const pcl::PointCloud<pcl::PointXYZI>::Ptr &raw_cloud,
         const std::vector<PlaneInfo> &selected_planes,
         float dist_threshold,
         double radius) const;
 
-    //排序平面
     std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> sort_planes(
         const std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> &final_clouds) const;
 

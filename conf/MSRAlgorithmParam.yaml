@@ -4,7 +4,7 @@ SortCameraPlanes:
   chessboard_threshold: 1
 
 SortLidarPlanes:
-  wait_enter: false
+  wait_enter: true
   leaf_size: 0.03
   ground_smoothness_threshold_deg: 3
   ground_curvature_threshold: 0.5

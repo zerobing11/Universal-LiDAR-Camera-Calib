@@ -13,7 +13,7 @@ Eigen::Matrix3d ExpSO3(const Eigen::Vector3d& w) {
     return Eigen::Matrix3d::Identity() + std::sin(theta) * K + (1 - std::cos(theta)) * K * K;
 }
 
-// 单点的代价
+// Cost for a single point.
 struct PlaneCostFunctor {
     PlaneCostFunctor(const Eigen::Vector3d& point,
                   const Eigen::Vector4d& plane)
@@ -23,11 +23,11 @@ struct PlaneCostFunctor {
     bool operator()(const T* const rot_vec, const T* const trans, T* residual) const {
         T p_rotated[3];
         T point_T[3] = {T(point_[0]), T(point_[1]), T(point_[2])};
-        // 将点从雷达系旋转到相机系
+        // Rotate the point from lidar frame to camera frame.
         ceres::AngleAxisRotatePoint(rot_vec, point_T, p_rotated);
         T Xc[3] = {p_rotated[0] + trans[0], p_rotated[1] + trans[1], p_rotated[2] + trans[2]};
 
-        // 计算到对应平面的距离
+        // Compute the distance to the corresponding plane.
         residual[0] = T(plane_[0]) * Xc[0] + T(plane_[1]) * Xc[1] + T(plane_[2]) * Xc[2] + T(plane_[3]);
         return true;
     }
@@ -46,11 +46,11 @@ bool Coarse2Fine::add(const std::vector<Eigen::Vector4f>& camera_planes,
                       Eigen::Matrix3d& Optimized_Rcl,
                       Eigen::Vector3d& Optimized_tcl) {
     
-    // 将平面参数转换为 double 类型
+    // Convert plane parameters to double precision.
     std::vector<Eigen::Vector4d> planes_double;
     for(const auto& p : camera_planes) planes_double.emplace_back(p.cast<double>());
 
-    // 存储数据用于联合优化
+    // Store data for later joint optimization.
     FrameData frame_data;
     frame_data.camera_planes = planes_double;
     frame_data.clouds = filtered_clouds;
@@ -58,7 +58,7 @@ bool Coarse2Fine::add(const std::vector<Eigen::Vector4f>& camera_planes,
     frame_data.initial_tcl = Coarse_tcl;
     frames_data_.push_back(frame_data);
 
-    // 执行单帧优化
+    // Run single-frame optimization.
     bool ok = OptimizeSingleFrame(planes_double, filtered_clouds, Coarse_Rcl, Coarse_tcl, Optimized_Rcl, Optimized_tcl);
     if (ok) {
         lidar_planes_ = TransformPlanesToLidarSingleFrame(planes_double, Optimized_Rcl, Optimized_tcl);
@@ -66,7 +66,7 @@ bool Coarse2Fine::add(const std::vector<Eigen::Vector4f>& camera_planes,
     return ok;
 }
 
-//单帧优化
+// Single-frame optimization.
 bool Coarse2Fine::OptimizeSingleFrame(const std::vector<Eigen::Vector4d>& planes_cam,
                                       const std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3>& clouds,
                                       const Eigen::Matrix3d& Rcl_init,
@@ -84,7 +84,7 @@ bool Coarse2Fine::OptimizeSingleFrame(const std::vector<Eigen::Vector4d>& planes
     
     for (size_t i = 0; i < 3; ++i) {
         for (const auto& pt : clouds[i]->points) {
-            // 残差：点到对应平面距离，待优化参数：旋转和平移
+            // Residual: point-to-plane distance; parameters: rotation and translation.
             ceres::CostFunction* cost_function =
                 new ceres::AutoDiffCostFunction<PlaneCostFunctor, 1, 3, 3>(
                     new PlaneCostFunctor(Eigen::Vector3d(pt.x, pt.y, pt.z), planes_cam[i]));
@@ -130,13 +130,13 @@ const std::array<Eigen::Vector4f, 3>& Coarse2Fine::GetLidarPlanes() const {
     return lidar_planes_;
 }
 
-//多帧联合优化
+// Multi-frame joint optimization.
 bool Coarse2Fine::JointOptimize(Eigen::Matrix3d& Final_Rcl, Eigen::Vector3d& Final_tcl) {
     if (frames_data_.empty()) {
         std::cerr << "Coarse2Fine::JointOptimize: No frames data!" << std::endl;
         return false;
     }
-    // 使用第一帧的细化参数作为初始值
+    // Use the refined parameters from the first frame as the initial estimate.
     Eigen::Matrix3d R_init = frames_data_[0].initial_Rcl;
     Eigen::Vector3d t_init = frames_data_[0].initial_tcl;
 
@@ -147,7 +147,7 @@ bool Coarse2Fine::JointOptimize(Eigen::Matrix3d& Final_Rcl, Eigen::Vector3d& Fin
     joint_t_vec[0] = t_init(0); joint_t_vec[1] = t_init(1); joint_t_vec[2] = t_init(2);
 
     ceres::Problem joint_problem;
-    //多帧点云联合
+    // Joint optimization over point clouds from all frames.
     for (const auto& frame : frames_data_) {
         for (size_t i = 0; i < 3; ++i) {
             for (const auto& pt : frame.clouds[i]->points) {

@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
         {
             publishPointCloud(all_candidates_vis, map_pub);
             ros::spinOnce();
-            waitForEnter("Candidate planes visualized.", wait_enter);
+            waitForEnter("Candidate planes visualized. Press ENTER to select the optimal 3D chessboard.", wait_enter);
         }
         if (!sort_success)
             continue;
@@ -234,11 +234,8 @@ int main(int argc, char **argv) {
         {
             Eigen::Vector4f plane_model;
             MlesacResult result = RunPlaneMlesac(down_sample_filtered_cloud[i]);
-            cout<<"plane-estimation score: "<<result.score<<endl;
             planes_models[i] = result.plane;
         }
-
-        CheckBoardPlane(planes_models);
 
         //--------------Extract 3D corners----------------
         lidar_corners_detect.add(planes_models);// 3D corner extraction entry
@@ -265,9 +262,6 @@ int main(int argc, char **argv) {
             std::cout << "frame " << frame_idx << " PnP solve failed" << std::endl;
             continue;
         }
-        cout<<endl<<"Coarse_Rcl: "<< endl << Coarse_Rcl << endl;
-        cout<<"Coarse_tcl: "<< endl<< Coarse_tcl << endl;
-        cout<<"Coarse reprojection error RMSE: "<< frame_rms << " pixels" << endl;
         //----------------Filter point clouds by line equations-------------
         std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> down_sample_filtered_clouds_by_lines = FilterCloudByLines(line_equations, down_sample_filtered_cloud, square_len/2,10);
         setPlaneIntensity(down_sample_filtered_clouds_by_lines);
@@ -292,15 +286,15 @@ int main(int argc, char **argv) {
         publishPointCloud(display_cloud, map_pub);
         publishPointCloud(corners, checker_pub);
         },
-        "press ENTER to coarse to fine and continue to next frame ...", wait_enter);
+        "press ENTER to solve extrinsic parameters ...", wait_enter);
         //---------------Coarse-to-fine extrinsic optimization-----------------
-        cout<<endl<<"wait for Optimizing"<<endl;
+        // cout<<endl<<"Waiting for extrinsic parameters solving"<<endl;
         if (camera_planes.find(frame_idx) != camera_planes.end()) {
              Eigen::Matrix3d Optimized_Rcl;
              Eigen::Vector3d Optimized_tcl;
              coarse_2_fine.add(camera_planes[frame_idx], Coarse_Rcl, Coarse_tcl, filtered_clouds, Optimized_Rcl, Optimized_tcl);
-             cout << "Optimized Rcl: " << endl << Optimized_Rcl << endl;
-             cout << "Optimized tcl: " << endl << Optimized_tcl.transpose() << endl;
+             cout << "Rcl: " << endl << Optimized_Rcl << endl;
+             cout << "tcl: " << endl << Optimized_tcl.transpose() << endl;
 
              // Validation: transform camera-frame corners to lidar frame with optimized extrinsic and report reprojection RMSE
              auto it_cam3d = cam_valid3d.find(frame_idx);
@@ -337,7 +331,6 @@ int main(int argc, char **argv) {
                  const double rmse_opt = (point_count > 0)
                      ? std::sqrt(squared_error / static_cast<double>(point_count))
                      : 0.0;
-                 cout << "Optimized reprojection error RMSE: "<< rmse_opt << " pixels" << endl;
              } 
              
              // Save optimized extrinsic of current frame

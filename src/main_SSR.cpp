@@ -41,6 +41,7 @@ int main(int argc, char **argv) {
     const int checker_corner_col = MSRConfig::checker_col - 1;
     bool otsu = MSRConfig::otsu;
     bool extract_ground = MSRConfig::extract_ground;
+    bool enable_joint_optimize = MSRConfig::enable_joint_optimize;
     float square_len = static_cast<float>(MSRConfig::square_len);
     std::pair<double, double> origin_corner_uv = {MSRConfig::origin_corner_uv[0] + square_len, MSRConfig::origin_corner_uv[1] + square_len};
     cv::Mat predefined_intrinsic, predefined_distortion;
@@ -181,7 +182,7 @@ int main(int argc, char **argv) {
         {
             publishPointCloud(all_candidates_vis, map_pub);
             ros::spinOnce();
-            waitForEnter("Candidate planes visualized.", wait_enter);
+            waitForEnter("Candidate planes visualized. Press ENTER to select the optimal 3D chessboard.", wait_enter);
         }
         if (!sort_success)
             continue;
@@ -227,7 +228,7 @@ int main(int argc, char **argv) {
         }
         publishPointCloud(filtered_cloud, map_pub);
         ros::spinOnce();
-        waitForEnter("Press ENTER to compute plane_model and corners...", wait_enter);
+        waitForEnter("Press ENTER to dropline...", wait_enter);
 
         //-------------Plane fitting and inlier retention-----------------
         std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> down_sample_filtered_cloud;
@@ -238,7 +239,7 @@ int main(int argc, char **argv) {
         {
             Eigen::Vector4f plane_model;
             MlesacResult result = RunPlaneMlesac(down_sample_filtered_cloud[i]);
-            cout<<"plane-estimation score: "<<result.score<<endl;
+            // cout<<"plane-estimation score: "<<result.score<<endl;
             planes_models[i] = result.plane;
         }
         CheckBoardPlane(planes_models);
@@ -246,7 +247,6 @@ int main(int argc, char **argv) {
         //---------==-----Extract 3D corners-----------------
         lidar_corners_detect.add(planes_models);// 3D corner extraction entry
         pcl::PointCloud<pcl::PointXYZI>::Ptr coarse_corners = lidar_corners_detect.GetMergedCornersCloud();
-        publishPointCloud(coarse_corners, checker_pub);
         std::vector<std::pair<LineEquation, LineEquation>> line_equations = lidar_corners_detect.GetLineEquations();// Get line equations
         // Prepare PnP corners
         coarse_valid3d[frame_idx].reserve(coarse_corners->size());
@@ -269,9 +269,6 @@ int main(int argc, char **argv) {
             std::cout << "frame " << frame_idx << " PnP solve failed" << std::endl;
             continue;
         }
-        cout<<endl<<"Coarse_Rcl: "<< endl << Coarse_Rcl << endl;
-        cout<<"Coarse_tcl: "<< endl<< Coarse_tcl.transpose() << endl;
-        cout<<"Coarse reprojection error RMSE: "<< coarse_frame_rms << " pixels" << endl;
         //----------------Filter point clouds by line equations-------------
         std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> down_sample_filtered_clouds_by_lines = FilterCloudByLines(line_equations, down_sample_filtered_cloud, square_len/3,0);
         setPlaneIntensity(down_sample_filtered_clouds_by_lines);
@@ -291,15 +288,12 @@ int main(int argc, char **argv) {
         }
         publishPointCloud(display_cloud, map_pub);
         ros::spinOnce();
-        waitForEnter("Press ENTER to compute plane_model and corners...", wait_enter);
+        waitForEnter("Press ENTER to solve extrinsic parameters ...", wait_enter);
         //---------------Coarse-to-fine extrinsic optimization-----------------
         Eigen::Matrix3d Optimized_Rcl;
         Eigen::Vector3d Optimized_tcl;
-        cout<<endl<<"wait for coarse to fine Optimizing"<<endl;
         if (camera_planes.find(frame_idx) != camera_planes.end()) {
              coarse_2_fine.add(camera_planes[frame_idx], Coarse_Rcl, Coarse_tcl, down_sample_filtered_clouds_by_lines, Optimized_Rcl, Optimized_tcl);// Extrinsic optimization entry
-             cout << "Optimized Rcl: " << endl << Optimized_Rcl << endl;
-             cout << "Optimized tcl: " << endl << Optimized_tcl.transpose() << endl;
         }
         // Transform camera planes to lidar frame with optimized extrinsic
         std::array<Eigen::Vector4f, 3> lidar_planes_opt = coarse_2_fine.GetLidarPlanes();
@@ -310,9 +304,9 @@ int main(int argc, char **argv) {
             corners_cam2lidar//out
             );
         //-----------------Extrinsic refinement------------------
-        cout<<endl<<"wait for fine to refine Optimizing"<<endl;
         std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> down_sample_final_plane_clouds;
         voxelDownsample(final_plane_clouds,0.005,down_sample_final_plane_clouds);
+        std::cout<<std::endl;
         refine.add(lidar_planes_opt,corners_cam2lidar,down_sample_final_plane_clouds);// Refine entry function
         pcl::PointCloud<pcl::PointXYZI>::Ptr refine_corners = refine.GetCornersCloudRefine();// Get final refined corners
         // Publish 3D cloud and corners
@@ -322,7 +316,7 @@ int main(int argc, char **argv) {
         publishPointCloud(final_cloud, map_pub);
         publishPointCloud(refine_corners, checker_pub);
         },
-        "press ENTER to coarse to solve pnp and continue to next frame ...", wait_enter);
+        "", false);
         //--------------Final PnP solving----------------------
         // Prepare PnP corners
         refine_valid3d[frame_idx].reserve(refine_corners->size());
@@ -343,53 +337,54 @@ int main(int argc, char **argv) {
             std::cout << "frame " << frame_idx << " PnP solve failed" << std::endl;
             continue;
         }
-        cout<<endl<<"Refine_Rcl: "<< endl << Refine_Rcl << endl;
-        cout<<"Refine_tcl: "<< endl<< Refine_tcl.transpose() << endl;
-        cout<<"Refine reprojection error RMSE: "<< refine_frame_rms << " pixels" << endl;
+        cout<<"Rcl: "<< endl << Refine_Rcl << endl;
+        cout<<"tcl: "<< endl<< Refine_tcl.transpose() << endl;
         if (append_extrinsic(extrinsic_path, lidar_img_name[0], Refine_Rcl, Refine_tcl)) {
             cout << "Extrinsic saved to: " << extrinsic_path << endl;
         } else {
             cerr << "Failed to open file: " << extrinsic_path << endl;
         }
     }
-    //----------------Full-batch PnP solving--------------------------
-    // Merge 2D and 3D corners from all valid frames
-    vector<cv::Point2f> all_2d_points;
-    vector<cv::Point3f> all_3d_points;
-    for (int frame_idx : camera_valid_frame) {
-        auto it2d = cam_valid2d.find(frame_idx);
-        if (refine_valid3d[frame_idx].size() != it2d->second.size())
-            continue;
-        // Merge points
-        all_2d_points.insert(all_2d_points.end(), it2d->second.begin(), it2d->second.end());
-        all_3d_points.insert(all_3d_points.end(), refine_valid3d[frame_idx].begin(), refine_valid3d[frame_idx].end());
-    }
+    //----------------Full-batch PnP solving (optional)--------------------------
+    if (enable_joint_optimize) {
+        // Merge 2D and 3D corners from all valid frames
+        vector<cv::Point2f> all_2d_points;
+        vector<cv::Point3f> all_3d_points;
+        for (int frame_idx : camera_valid_frame) {
+            auto it2d = cam_valid2d.find(frame_idx);
+            if (refine_valid3d[frame_idx].size() != it2d->second.size())
+                continue;
+            // Merge points
+            all_2d_points.insert(all_2d_points.end(), it2d->second.begin(), it2d->second.end());
+            all_3d_points.insert(all_3d_points.end(), refine_valid3d[frame_idx].begin(), refine_valid3d[frame_idx].end());
+        }
 
-    if (!all_2d_points.empty() && all_2d_points.size() == all_3d_points.size()) {
-        cout << endl << "================== Joint PnP ==================" << endl;
-        cout << "Total points: " << all_2d_points.size() << endl;
+        if (!all_2d_points.empty() && all_2d_points.size() == all_3d_points.size()) {
+            cout << endl << "================== Joint PnP ==================" << endl;
+            cout << "Total points: " << all_2d_points.size() << endl;
 
-        Eigen::Matrix3d Joint_Rcl;
-        Eigen::Vector3d Joint_tcl;
-        double joint_rms;
-        bool ok = SolveSqpnpPnP(all_3d_points, all_2d_points, predefined_intrinsic, predefined_distortion,
-                                Joint_Rcl, Joint_tcl, joint_rms);
-        if (ok) {
-            cout << "Joint_Rcl: " << endl << Joint_Rcl << endl;
-            cout << "Joint_tcl: " << endl << Joint_tcl.transpose() << endl;
-            cout << "Joint reprojection error RMSE: " << joint_rms << " pixels" << endl;
+            Eigen::Matrix3d Joint_Rcl;
+            Eigen::Vector3d Joint_tcl;
+            double joint_rms;
+            bool ok = SolveSqpnpPnP(all_3d_points, all_2d_points, predefined_intrinsic, predefined_distortion,
+                                    Joint_Rcl, Joint_tcl, joint_rms);
+            if (ok) {
+                cout << "Joint_Rcl: " << endl << Joint_Rcl << endl;
+                cout << "Joint_tcl: " << endl << Joint_tcl.transpose() << endl;
+                cout << "Joint reprojection error RMSE: " << joint_rms << " pixels" << endl;
 
-            // Save full-batch extrinsic
-            if (append_extrinsic(extrinsic_path, "joint", Joint_Rcl, Joint_tcl)) {
-                cout << "Joint Extrinsic appended to: " << extrinsic_path << endl;
+                // Save full-batch extrinsic
+                if (append_extrinsic(extrinsic_path, "joint", Joint_Rcl, Joint_tcl)) {
+                    cout << "Joint Extrinsic appended to: " << extrinsic_path << endl;
+                }
+            }
+            else {
+                cerr << "Joint PnP solve failed" << endl;
             }
         }
         else {
-            cerr << "Joint PnP solve failed" << endl;
+            cerr << "No valid points for Joint PnP" << endl;
         }
-    }
-    else {
-        cerr << "No valid points for Joint PnP" << endl;
     }
 
 }

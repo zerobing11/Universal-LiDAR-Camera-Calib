@@ -5,16 +5,14 @@
 #include <sstream>
 #include <vector>
 #include <map>
-//用于删除目录
 #include <dirent.h>  
-//用于新建目录
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <cerrno>
 #include <boost/concept_check.hpp>
 
 #include <Eigen/Core>
-#include <Eigen/Geometry>//使用到了四元数数据结构
+#include <Eigen/Geometry>
 
 #include <opencv/cv.h>    
 #include <opencv/highgui.h>    
@@ -88,10 +86,9 @@ namespace FileIO
 	  f.getline(c,8000);
 	  content = c;
 	  
-	  // 去除前后空格
 	  size_t start = content.find_first_not_of(" \t\r\n");
 	  size_t end = content.find_last_not_of(" \t\r\n");
-	  if(start == string::npos) // 空行或只包含空格
+	  if(start == string::npos)
 	  {
 	    continue;
 	  }
@@ -104,7 +101,6 @@ namespace FileIO
 	      vector<float> tmp;
 	      for(int i=0;i<p.size();i++)
 	      {
-		// 跳过空字符串，避免stof转换错误
 		if(p[i].empty() || p[i] == "" || p[i] == " ")
 		{
 		  continue;
@@ -118,14 +114,13 @@ namespace FileIO
 		  // cout<<"[Warning] ReadTxt2Float: Invalid number format in "<<path<<": '"<<p[i]<<"', skipping."<<endl;
 		}
 	      }
-	      if(!tmp.empty())  // 只添加非空的行
+	      if(!tmp.empty())
 	      {
 		res.push_back(tmp);
 	      }
 	  }
       }
       f.close();
-      //是否需要打印
       if(print)
       {
 	 for(int i=0;i<res.size();i++)
@@ -156,7 +151,6 @@ namespace FileIO
 	  res.push_back(content);
       }
       f.close();
-      //是否需要打印
       if(print)
       {
 	 for(int i=0;i<res.size();i++)
@@ -183,7 +177,6 @@ namespace FileIO
     cout<<"Finish Writting "<<path<<endl;
   }
   
-  //输入/root/fyy/a.jpg 返回 .jpg 和 /root/fyy/
   vector<string> ProcessPath(string path,bool print = false)
   {
     vector<string> res;
@@ -225,10 +218,9 @@ namespace FileIO
 	  f.getline(buffer,5000);
 	  string content = buffer;
 	  
-	  // 去除前后空格
 	  size_t start = content.find_first_not_of(" \t\r\n");
 	  size_t end = content.find_last_not_of(" \t\r\n");
-	  if(start == string::npos) // 空行或只包含空格
+	  if(start == string::npos)
 	  {
 	    continue;
 	  }
@@ -247,7 +239,6 @@ namespace FileIO
 	    vector<float> data;
 	    for(int i=1;i<messages.size();i++)
 	    {
-	      // 跳过空字符串，避免stof转换错误
 	      if(messages[i].empty() || messages[i] == "" || messages[i] == " ")
 	      {
 	        continue;
@@ -271,7 +262,6 @@ namespace FileIO
     return res;
   }
   
-  //使用#表示有注释了
   map<string,vector<float>> read_config_withcomments(string path)
   {
     map<string,vector<float>> res;
@@ -282,11 +272,9 @@ namespace FileIO
     {
 	  f.getline(buffer,5000);
 	  string content = buffer;
-	  
-	  // 去除前后空格
 	  size_t start = content.find_first_not_of(" \t\r\n");
 	  size_t end = content.find_last_not_of(" \t\r\n");
-	  if(start == string::npos) // 空行或只包含空格
+	  if(start == string::npos)
 	  {
 	    continue;
 	  }

@@ -7,7 +7,7 @@ void LidarSort::ResetFinalClouds() {
         cloud.reset(new pcl::PointCloud<pcl::PointXYZINormal>());
     }
 }
-//区域生长提取平面
+// Extract planar clusters using region growing.
 std::vector<pcl::PointIndices> LidarSort::performRegionGrowing(
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
     int min_cluster_size,
@@ -38,7 +38,7 @@ std::vector<pcl::PointIndices> LidarSort::performRegionGrowing(
     reg.extract(clusters);
     return clusters;
 }
-//区域生长剔除地面
+// Remove ground plane using region growing.
 pcl::PointCloud<pcl::PointXYZI>::Ptr LidarSort::extractGroundPlane(
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
     int min_points,
@@ -105,7 +105,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr LidarSort::extractGroundPlane(
     }
     return ground_cloud;
 }
-//区域生长剔除天花板
+// Remove ceiling/roof plane using region growing.
 pcl::PointCloud<pcl::PointXYZI>::Ptr LidarSort::extractRoofPlane(
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
     int min_points,
@@ -172,7 +172,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr LidarSort::extractRoofPlane(
     }
     return roof_cloud;
 }
-//挑选出三维标定板平面
+// Select the three calibration-board planes from all candidate planes.
 std::vector<LidarSort::PlaneInfo> LidarSort::selectBestThreePlanes(
     const std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &all_planes,
     double target_dist,
@@ -211,7 +211,7 @@ std::vector<LidarSort::PlaneInfo> LidarSort::selectBestThreePlanes(
                 Eigen::Vector3f n1 = planes_info[i].coeffs.head<3>();
                 Eigen::Vector3f n2 = planes_info[j].coeffs.head<3>();
                 Eigen::Vector3f n3 = planes_info[k].coeffs.head<3>();
-                //正交阈值要满足
+                // Check orthogonality between plane normals.
                 auto calc_angle_deg = [](const Eigen::Vector3f &a, const Eigen::Vector3f &b) {
                     Eigen::Vector3f na = a;
                     Eigen::Vector3f nb = b;
@@ -244,7 +244,7 @@ std::vector<LidarSort::PlaneInfo> LidarSort::selectBestThreePlanes(
     }
 
     if (valid_triplets.empty()) return {};
-    //质心阈值也要满足
+    // Evaluate triplets based on centroid distance constraints.
     double min_D = std::numeric_limits<double>::max();
     Triplet best_triplet = {-1, -1, -1, 0};
 
@@ -274,7 +274,7 @@ std::vector<LidarSort::PlaneInfo> LidarSort::selectBestThreePlanes(
     result.push_back(planes_info[best_triplet.k]);
     return result;
 }
-//从原始点云中提取出范围内的原始三维标定板
+// Extract three 3D checkerboard planes from the raw point cloud within a given distance.
 std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> LidarSort::extractFinalPoints(
     const pcl::PointCloud<pcl::PointXYZI>::Ptr &raw_cloud,
     const std::vector<PlaneInfo> &selected_planes,
@@ -333,7 +333,7 @@ std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> LidarSort::extractFina
     }
     return result_clouds;
 }
-//为原始点云中提取出来的三维标定板排序
+// Sort the three extracted 3D checkerboard planes.
 std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> LidarSort::sort_planes(
     const std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> &final_clouds) const {
     std::array<double, 3> min_z_vals;
@@ -403,7 +403,7 @@ LidarSort::LidarSort(double leaf_size,
 }
 
 bool LidarSort::add(const std::string &lidar_name) {
-    ResetFinalClouds(); //清空缓存
+    ResetFinalClouds();
     all_candidate_planes_.clear();
     pcl::PointCloud<pcl::PointXYZI>::Ptr raw_cloud(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
@@ -415,16 +415,15 @@ bool LidarSort::add(const std::string &lidar_name) {
     }
     if (raw_cloud->empty())
         return false;
-    //降采样
+    // Downsample the raw point cloud.
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::VoxelGrid<pcl::PointXYZI> vg;
     vg.setInputCloud(raw_cloud);
     vg.setLeafSize(leaf_size_, leaf_size_, leaf_size_);
     vg.filter(*cloud_filtered);
-    cout<<"lidar_sort: downsampled cloud size: "<< cloud_filtered->size()<<endl;
     if (cloud_filtered->empty())
         return false;
-    //提取地面点云
+    // Optionally extract and remove ground points.
     pcl::PointCloud<pcl::PointXYZI>::Ptr non_ground_cloud(new pcl::PointCloud<pcl::PointXYZI>());
     if (extract_ground_) {
         extractGroundPlane(
@@ -438,14 +437,13 @@ bool LidarSort::add(const std::string &lidar_name) {
         non_ground_cloud = cloud_filtered;
     }
     
-    //对非地面且点云进行区域生长
     std::vector<pcl::PointIndices> obj_clusters = performRegionGrowing(
         non_ground_cloud,
         min_points_per_plane_,
         rg_neighbor_k_,
         smoothness_threshold_deg_,
         curvature_threshold_);
-    //从区域生长结果中提取候选平面
+
     pcl::ExtractIndices<pcl::PointXYZI> extract;
     extract.setInputCloud(non_ground_cloud);
     extract.setNegative(false);
@@ -456,16 +454,16 @@ bool LidarSort::add(const std::string &lidar_name) {
         extract.filter(*cloud);
         all_candidate_planes_.push_back(cloud);
     }
-    //从候选平面中选择最佳三个平面
+
     std::vector<PlaneInfo> selected_planes = selectBestThreePlanes(
         all_candidate_planes_, centroid_distance_target_, plane_orthogonality_threshold_);
     if (selected_planes.size() != 3) {
         cout<<"the frame no three planes satisfy plane_orthogonality_threshold"<<endl;
         return false;
     }
-    //在原始点云中提取候选平面所对应的范围内点云
+
     final_clouds_ = extractFinalPoints(raw_cloud, selected_planes, dist_threshold_, extraction_radius_);
-    //三个平面点云排序
+
     final_clouds_ = sort_planes(final_clouds_);
     return true;
 }

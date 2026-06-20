@@ -9,7 +9,6 @@ Camera::Camera(int corners_col_,int corners_row_,string path,double corner_thres
     path_root=path;
     numofcorner=corners_col_*corners_row_;
 
-    // 设置自定义阈值
     corner_detect_threshold = corner_thresh;
     chessboard_threshold = chess_thresh;
     initialization=false;
@@ -18,12 +17,11 @@ Camera::Camera(int corners_col_,int corners_row_,string path,double corner_thres
     corners_row=corners_row_;
     distParameter = Mat(1,5,CV_64FC1,Scalar::all(0));
 
-    // 保存用于PnP排序的参数
     square_size_ = square_size;
     intrinsic_for_sort_ = intrinsic_matrix.clone();
     distortion_for_sort_ = distortion_coeffs.clone();
     line_plane_pairs_ = line_plane_pairs;
-    // 初始化单个棋盘格系下的3D角点坐标
+
     board_3d_points_.clear();
     for (int row = 0; row < corners_row; row++)
     {
@@ -54,7 +52,6 @@ void Camera::DataClear()
     corners_s.v2.clear();
     corners_s.score.clear();
     
-    // 清理 cur_boards 中的所有 vector 成员
     for(int i = 0; i < 3; i++)
     {
         cur_boards[i].corners.clear();
@@ -84,7 +81,7 @@ bool Camera::Ensure_ValidFrame(std::vector<cv::Mat> chessboards)
     }
 }
 
-// 可视化棋盘格，按排序后的顺序显示
+// Visualize chessboards in sorted order.
 void Camera::visualize_chessboards() {
     string corner_debug_dir = path_root + "/img_corner_test";
     string mkdir_cmd = "mkdir -p " + corner_debug_dir;
@@ -97,7 +94,6 @@ void Camera::visualize_chessboards() {
         cv::Scalar(255, 0, 0),
     };
 
-    // 按排序后的平面顺序，用 cur_boards 中的角点顺序
     for(int board_idx = 0; board_idx < 3; board_idx++)
     {
         if(board_idx < 0 || board_idx >= 3 || board_idx >= chessboards.size()) continue;
@@ -105,7 +101,6 @@ void Camera::visualize_chessboards() {
         cv::Scalar color = board_colors[board_idx];
         const vector<cv::Point2f>& corners = cur_boards[board_idx].corners;
         
-        // 绘制每个角点及其序号
         for(size_t i = 0; i < corners.size(); ++i)
         {
             const cv::Point2f& pt = corners[i];
@@ -115,15 +110,6 @@ void Camera::visualize_chessboards() {
                        cv::FONT_HERSHEY_SIMPLEX, 0.8, color, 2.5);
         }
         
-        // // 在每个板子的2D角点起点上方标注 Plane_xxx
-        // if(!corners.empty())
-        // {
-        //     cv::Point2f origin_pt = corners.front();
-        //     string board_label = "Plane_" + std::to_string(board_idx + 1);
-        //     cv::putText(chessboard_vis_img, board_label,
-        //                cv::Point2f(origin_pt.x - 20, origin_pt.y - 20),
-        //                cv::FONT_HERSHEY_SIMPLEX, 0.6, color, 2);
-        // }
     }
 
     string chessboard_save_path = corner_debug_dir + "/frame_" +
@@ -133,7 +119,7 @@ void Camera::visualize_chessboards() {
 }
 
 
-// 可视化棋盘格，按排序后的顺序显示
+// Visualize sorted chessboard corners.
 void Camera::visualize_corners() {
     string corner_debug_dir = path_root + "/img_sorted_boards";
     string mkdir_cmd = "mkdir -p " + corner_debug_dir;
@@ -146,7 +132,6 @@ void Camera::visualize_corners() {
         cv::Scalar(255, 0, 0),
     };
 
-    // 按排序后的平面顺序，用 cur_boards 中的角点顺序
     for(int board_idx = 0; board_idx < 3; board_idx++)
     {
         if(board_idx < 0 || board_idx >= 3 || board_idx >= chessboards.size()) continue;
@@ -154,7 +139,6 @@ void Camera::visualize_corners() {
         cv::Scalar color = board_colors[board_idx];
         const vector<cv::Point2f>& corners = cur_boards[board_idx].orderd_corners;
 
-        // 绘制每个角点及其序号
         for(size_t i = 0; i < corners.size(); ++i)
         {
             const cv::Point2f& pt = corners[i];
@@ -171,64 +155,7 @@ void Camera::visualize_corners() {
     cout << "saved sorted checker corners image in: " << chessboard_save_path << endl;
 }
 
-// 根据角点矩形区域生成遮罩并保存
-void Camera::visualize_masks() {
-    string mask_dir = path_root + "/img_mask";
-    string mkdir_cmd = "mkdir -p " + mask_dir;
-    system(mkdir_cmd.c_str());
-
-    if (org_img.empty()) {
-        return;
-    }
-
-    auto compute_mask_rect = [&](const vector<cv::Point2f>& corners)->cv::Rect {
-        if (corners.empty()) {
-            return cv::Rect();
-        }
-        float min_x = std::numeric_limits<float>::max();
-        float min_y = std::numeric_limits<float>::max();
-        float max_x = -std::numeric_limits<float>::max();
-        float max_y = -std::numeric_limits<float>::max();
-        for (const auto& pt : corners) {
-            min_x = std::min(min_x, pt.x);
-            min_y = std::min(min_y, pt.y);
-            max_x = std::max(max_x, pt.x);
-            max_y = std::max(max_y, pt.y);
-        }
-        int x1 = static_cast<int>(std::floor(min_x)) - 10;
-        int y1 = static_cast<int>(std::floor(min_y)) - 10;
-        int x2 = static_cast<int>(std::ceil(max_x)) + 10;
-        int y2 = static_cast<int>(std::ceil(max_y)) + 10;
-        x1 = std::max(0, x1);
-        y1 = std::max(0, y1);
-        x2 = std::min(org_img.cols - 1, x2);
-        y2 = std::min(org_img.rows - 1, y2);
-        if (x2 <= x1 || y2 <= y1) {
-            return cv::Rect();
-        }
-        return cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
-    };
-
-    std::array<cv::Rect, 3> board_rects;
-    for (int i = 0; i < 3; ++i) {
-        board_rects[i] = compute_mask_rect(cur_boards[i].orderd_corners);
-    }
-
-    for (int keep_idx = 0; keep_idx < 3; ++keep_idx) {
-        cv::Mat masked_img = org_img.clone();
-        for (int board_idx = 0; board_idx < 3; ++board_idx) {
-            if (board_idx == keep_idx) continue;
-            if (board_rects[board_idx].area() <= 0) continue;
-            cv::rectangle(masked_img, board_rects[board_idx], cv::Scalar(0, 0, 0), cv::FILLED);
-        }
-        string save_path = mask_dir + "/" + std::to_string(img_indx)
-                         + "_" + std::to_string(keep_idx + 1) + ".png";
-        cv::imwrite(save_path, masked_img);
-    }
-}
-
-
-//提取棋盘格角点坐标,确保行列顺序正确
+// Extract chessboard corner coordinates and ensure correct row/column order.
 void Camera::extract_corners()
 {
     for (int indx_bd = 0; indx_bd < 3; indx_bd++) {
@@ -254,19 +181,17 @@ void Camera::extract_corners()
             }
         }
 
-        // 因为棋盘格生长方向的不确定性，角点顺序可能是原始的、或者行倒序、或者列倒序等
+        // Due to uncertain chessboard growth direction, corner order may be original,
+        // row-reversed, or column-reversed. Run PnP for each candidate and keep the one with the smallest error.
         vector<vector<cv::Point2f>> candidates;
         vector<string> labels = {"Original", "Rotate180", "FlipX (RowRev)", "FlipY (ColRev)"};
         
-        // 原本
         candidates.push_back(base_pts);
 
-        //旋转 180
         vector<cv::Point2f> pts_180 = base_pts;
         std::reverse(pts_180.begin(), pts_180.end());
         candidates.push_back(pts_180);
 
-        //翻转x轴镜像
         vector<cv::Point2f> pts_flip_x;
         for(int r = 0; r < corners_row; r++) {
             for(int c = corners_col - 1; c >= 0; c--) {
@@ -275,7 +200,6 @@ void Camera::extract_corners()
         }
         candidates.push_back(pts_flip_x);
 
-        // 翻转y轴镜像
         vector<cv::Point2f> pts_flip_y;
         for(int r = corners_row - 1; r >= 0; r--) {
             for(int c = 0; c < corners_col; c++) {
@@ -284,13 +208,11 @@ void Camera::extract_corners()
         }
         candidates.push_back(pts_flip_y);
 
-        // 对每种候选进行PnP求解，选择误差最小的
         int best_idx = 0;
         double min_error = std::numeric_limits<double>::max();
         
         for(int k=0; k<4; k++) {
             cv::Mat rvec, tvec;
-            // 使用EPnP求解
             bool success = cv::solvePnP(board_3d_points_, candidates[k], intrinsic_for_sort_, distortion_for_sort_,
                                         rvec, tvec, false, cv::SOLVEPNP_EPNP);
             
@@ -312,34 +234,28 @@ void Camera::extract_corners()
                 best_idx = k;
             }
         }
-        // cout << "  板 " << indx_bd << " 最佳方向: " << labels[best_idx] << " (Error: " << min_error << ")" << endl;
         cur_boards[indx_bd].corners = candidates[best_idx];
     }
 }
 
-// 计算三个标定板的交线方向向量
-// line_plane_pairs[i] = {a, b} 表示：
-// line_u: plane[i] 与 plane[a] 的交线
-// line_v: plane[i] 与 plane[b] 的交线
+// Compute intersection line direction vectors for the three calibration boards.
 void Camera::compute_line_model(const std::array<std::pair<int, int>, 3>& line_plane_pairs)
 {
     for(int i = 0; i < 3; i++)
     {
-        int plane_a = line_plane_pairs[i].first;   // line_u 对应的另一个平面
-        int plane_b = line_plane_pairs[i].second;  // line_v 对应的另一个平面
+        int plane_a = line_plane_pairs[i].first; 
+        int plane_b = line_plane_pairs[i].second;
         
         Eigen::Vector3f ni = cur_boards[i].plane.head<3>();
         Eigen::Vector3f na = cur_boards[plane_a].plane.head<3>();
         Eigen::Vector3f nb = cur_boards[plane_b].plane.head<3>();
         
-        // 计算 plane[i] 与 plane[a] 的交线 -> line_u
         Eigen::Vector3f dir_u = ni.cross(na);
         float norm_u = dir_u.norm();
         if(norm_u > 1e-6)
         {
             dir_u /= norm_u;
-            // 找第三个平面的索引用于调整方向
-            int third_plane = 3 - i - plane_a;  // 因为 0+1+2=3
+            int third_plane = 3 - i - plane_a;
             Eigen::Vector3f n_third = cur_boards[third_plane].plane.head<3>();
             if(dir_u.dot(n_third) < 0.0f)
             {
@@ -347,13 +263,11 @@ void Camera::compute_line_model(const std::array<std::pair<int, int>, 3>& line_p
             }
         }
         
-        // 计算 plane[i] 与 plane[b] 的交线 -> line_v
         Eigen::Vector3f dir_v = ni.cross(nb);
         float norm_v = dir_v.norm();
         if(norm_v > 1e-6)
         {
             dir_v /= norm_v;
-            // 找第三个平面的索引用于调整方向
             int third_plane = 3 - i - plane_b;
             Eigen::Vector3f n_third = cur_boards[third_plane].plane.head<3>();
             if(dir_v.dot(n_third) < 0.0f)
@@ -362,12 +276,12 @@ void Camera::compute_line_model(const std::array<std::pair<int, int>, 3>& line_p
             }
         }
         
-        cur_boards[i].line_u = dir_u;  // plane[i] 与 plane[a] 的交线
-        cur_boards[i].line_v = dir_v;  // plane[i] 与 plane[b] 的交线
+        cur_boards[i].line_u = dir_u;
+        cur_boards[i].line_v = dir_v;
     }
 }
 
-// 计算三块平面两两之间的法向夹角，并判断是否均大于80度
+// Compute pairwise normal angles between the three planes and check whether they are all greater than 80 degrees.
 bool Camera::compute_plane_angle()
 {
     auto clamp01 = [](float v){ return std::max(-1.0f, std::min(1.0f, v)); };
@@ -396,25 +310,23 @@ bool Camera::compute_plane_angle()
     return all_angles_gt_80;
 }
 
-// 对三个标定板进行排序（相机系下3D坐标）
+// Sort the three calibration boards using 3D coordinates in the camera frame.
 bool Camera::sort_boards()
 {
     struct BoardFeature {
-        int board_idx;          // 原始标定板索引
-        float max_x;            // 角点在相机系下的最大x值
-        float min_x;            // 角点在相机系下的最小x值
-        float max_y;            // 角点在相机系下的最大y值
-        vector<cv::Point3f> corners_in_cam;  // 角点在相机系下的坐标
+        int board_idx;
+        float max_x;
+        float min_x;
+        float max_y;
+        vector<cv::Point3f> corners_in_cam;
     };
     vector<BoardFeature> board_features(3);
 
-    // 对每个标定板使用PnP求解相机位姿，计算角点在相机系下的坐标
     for(int board_idx = 0; board_idx < 3; board_idx++)
     {
         board_features[board_idx].board_idx = board_idx;
         vector<cv::Point2f> image_pts = cur_boards[board_idx].corners;
 
-        // 使用PnP求解相机在标定板系下的位姿
         cv::Mat rvec, tvec;
         bool success = cv::solvePnP(board_3d_points_, image_pts, intrinsic_for_sort_, distortion_for_sort_,
                                     rvec, tvec, false, cv::SOLVEPNP_EPNP);
@@ -424,7 +336,6 @@ bool Camera::sort_boards()
                                    rvec, tvec, true, cv::SOLVEPNP_ITERATIVE);
         }
 
-        // 计算并打印重投影误差
         vector<cv::Point2f> reprojected_pts;
         cv::projectPoints(board_3d_points_, rvec, tvec, intrinsic_for_sort_, distortion_for_sort_, reprojected_pts);
         double reproj_error = 0.0;
@@ -438,9 +349,8 @@ bool Camera::sort_boards()
         {
             reproj_error = std::sqrt(reproj_error / static_cast<double>(image_pts.size()));
         }
-        cout << "unsorted checker image " << board_idx << " reproject-error-RMSE: " << reproj_error << " pixel" << endl;
+        // cout << "unsorted checker image " << board_idx << " reproject-error-RMSE: " << reproj_error << " pixel" << endl;
 
-        // 将标定板系下的角点转换到相机系下，存到板子结构体中并且计算角点在相机系下的最值
         cv::Mat R;
         cv::Rodrigues(rvec, R);
         board_features[board_idx].max_x = -std::numeric_limits<float>::max();
@@ -467,7 +377,6 @@ bool Camera::sort_boards()
                 board_features[board_idx].max_y = y_cam;
         }
         
-        // 计算相机系下的平面方程，标定板在自身坐标系的法向量就是001
         Eigen::Matrix3d Rcw;
         Rcw << R.at<double>(0,0), R.at<double>(0,1), R.at<double>(0,2),
                R.at<double>(1,0), R.at<double>(1,1), R.at<double>(1,2),
@@ -481,7 +390,7 @@ bool Camera::sort_boards()
             normal_cam /= norm_len;
         }
         double d_plane = -normal_cam.dot(tcw);
-        if (d_plane < 0) {        // 确保d>0
+        if (d_plane < 0) {
             normal_cam = -normal_cam;
             d_plane = -d_plane;
         }
@@ -494,8 +403,6 @@ bool Camera::sort_boards()
         );
     }
 
-    // 平面排序：平面3为法向量与相机系-Y轴夹角最小者；
-    //          平面2为剩余中与相机系+X轴夹角最小者；平面1为剩余者
     int plane1_idx = -1, plane2_idx = -1, plane3_idx = -1;
     const Eigen::Vector3f axis_neg_y(0.0f, -1.0f, 0.0f);
     const Eigen::Vector3f axis_pos_x(1.0f, 0.0f, 0.0f);
@@ -542,33 +449,25 @@ bool Camera::sort_boards()
         return false;
     }
 
-    // 根据排序顺序重新组织标定板数据
     struct BOARD board0 = cur_boards[plane1_idx];
     struct BOARD board1 = cur_boards[plane2_idx];
     struct BOARD board2 = cur_boards[plane3_idx];
-    // cout<<"原始板 "<<plane1_idx<<"变成新板0"<<endl;
-    // cout<<"原始板 "<<plane2_idx<<"变成新板1"<<endl;
-    // cout<<"原始板 "<<plane3_idx<<"变成新板2"<<endl;
-    // board0.plane = -board0.plane;//实验用！！！！！
-    // board1.plane = -board1.plane;//实验用！！！！！
-    // board2.plane = -board2.plane;//实验用！！！！！
+
     cur_boards[0] = board0;
     cur_boards[1] = board1;
     cur_boards[2] = board2;
     
-    // 计算排序后三个平面的法向夹角，并判断是否都大于80度
     bool angle_valid = compute_plane_angle();
     
-    // line_plane_pairs[i] = {a, b}: line_u为plane[i]与plane[a]交线，line_v为plane[i]与plane[b]交线
     compute_line_model(line_plane_pairs_);
     return angle_valid;
 }
 
 
-// 对角点进行排序，生成 orderd_corners 和 orderd_corners_3d
+// Sort corners and generate orderd_corners and orderd_corners_3d.
 void Camera::sort_corners()
 {
-    // 找三平面的原点,使三点组成的三角形周长最小
+    // Find the origin points of the three planes by minimizing the triangle perimeter formed by the three points.
     float min_perimeter = std::numeric_limits<float>::max();
     std::array<int, 3> origin_indices = {0, 0, 0};
 
@@ -598,7 +497,7 @@ void Camera::sort_corners()
         }
     }
 
-    // 设置各平面的原点
+    // Set the origin point for each plane.
     for(int i = 0; i < 3; i++)
     {
         cv::Point3f pt = cur_boards[i].corners_3d[origin_indices[i]];
@@ -606,7 +505,7 @@ void Camera::sort_corners()
         cur_boards[i].origin = Eigen::Vector3f(pt.x, pt.y, pt.z);
     }
 
-    // 对每个平面进行角点排序
+    // Sort corners for each plane.
     for(int board_idx = 0; board_idx < 3; board_idx++)
     {
         const std::vector<cv::Point3f>& pts_3d = cur_boards[board_idx].corners_3d;
@@ -617,15 +516,12 @@ void Camera::sort_corners()
 
         int origin_idx = origin_indices[board_idx];
 
-        // 用于记录哪些点已被使用
         std::vector<bool> used(pts_3d.size(), false);
         used[origin_idx] = true;
 
-        // 行起点列表（第一个是 origin）
         std::vector<int> row_start_indices;
         row_start_indices.push_back(origin_idx);
 
-        // 沿 line_v 方向找 corners_row-1 个行起点
         for(int r = 0; r < corners_row - 1; r++)
         {
             float min_dist = std::numeric_limits<float>::max();
@@ -638,9 +534,8 @@ void Camera::sort_corners()
                 Eigen::Vector3f pt(pts_3d[j].x, pts_3d[j].y, pts_3d[j].z);
                 Eigen::Vector3f v = pt - origin;
                 float proj = v.dot(line_v);
-                if(proj <= 0) continue;  // 只考虑 line_v 正方向
+                if(proj <= 0) continue;
 
-                // 点到射线的垂直距离
                 Eigen::Vector3f perpendicular = v - proj * line_v;
                 float dist = perpendicular.norm();
 
@@ -658,14 +553,12 @@ void Camera::sort_corners()
             }
         }
 
-        // 按距离原点的距离排序行起点（由近到远）
         std::sort(row_start_indices.begin(), row_start_indices.end(), [&](int a, int b){
             Eigen::Vector3f pa(pts_3d[a].x, pts_3d[a].y, pts_3d[a].z);
             Eigen::Vector3f pb(pts_3d[b].x, pts_3d[b].y, pts_3d[b].z);
             return (pa - origin).norm() < (pb - origin).norm();
         });
 
-        // 对每个行起点，沿 line_u 方向找 corners_col-1 个点
         std::vector<std::vector<int>> rows;
         for(size_t r = 0; r < row_start_indices.size(); r++)
         {
@@ -688,9 +581,8 @@ void Camera::sort_corners()
                     Eigen::Vector3f pt(pts_3d[j].x, pts_3d[j].y, pts_3d[j].z);
                     Eigen::Vector3f v = pt - row_origin;
                     float proj = v.dot(line_u);
-                    if(proj <= 0) continue;  // 只考虑 line_u 正方向
+                    if(proj <= 0) continue; 
 
-                    // 点到射线的垂直距离
                     Eigen::Vector3f perpendicular = v - proj * line_u;
                     float dist = perpendicular.norm();
 
@@ -708,7 +600,6 @@ void Camera::sort_corners()
                 }
             }
 
-            // 按距离行起点的距离排序（行起点除外）
             if(row.size() > 1)
             {
                 std::sort(row.begin() + 1, row.end(), [&](int a, int b){
@@ -721,7 +612,6 @@ void Camera::sort_corners()
             rows.push_back(row);
         }
 
-        // 拼接成 orderd_corners_3d 和 orderd_corners
         for(const auto& row : rows)
         {
             for(int idx : row)
@@ -738,7 +628,7 @@ void Camera::sort_corners()
     org_img=cv::imread(path,1);
     if(org_img.empty())
     {
-        cout << "加载图像失败，路径无效或文件为空: " << path << endl;
+        cout << "Failed to load image: invalid path or file is empty: " << path << endl;
         return false;
     }
     img = org_img.clone();
@@ -752,7 +642,7 @@ void Camera::sort_corners()
 
     CornerDetAC corner_detector(img);
     ChessboradStruct chessboardstruct;
-    // 检测棋盘格角点与棋盘格
+    // Detect chessboard corners and chessboards.
     cout <<endl<< "------------------------------------------------"<< endl;
      cout << "camera_frame: "<< path << endl;
      corner_detector.detectCorners(img, corners_p, corners_s, corner_detect_threshold);
@@ -762,22 +652,18 @@ void Camera::sort_corners()
     cout << "detected chessboards num: " << chessboards.size() << endl;
 
     bool ischoose = false;
-    // 排序
+    // Sort boards and corners.
     if(Ensure_ValidFrame(chessboards))
     {
-        // 提取棋盘格角点坐标
         extract_corners();
-        // 为标定板排序，并判断三平面夹角是否都大于80度
         bool boards_valid = sort_boards();
         if(boards_valid)
         {
-            // 对每个标定板的角点进行排序
+            // Sort corners for each calibration board.
             sort_corners();
-            visualize_chessboards();
+            // visualize_chessboards();
             visualize_corners();
-            // visualize_masks();
 
-            // 收集三个标定板的所有平面方程与有序角点
             vector<cv::Point2f> three_bd_2d_corners;
             vector<cv::Point3f> three_bd_3d_corners;
             vector<Eigen::Vector4f> three_bd_planes;
@@ -799,12 +685,12 @@ void Camera::sort_corners()
         }
         else
         {
-            cout << ">>> 帧 " << img_indx << " 为无效帧（三平面夹角存在<=80度）" << endl;
+            cout << ">>> Frame " << img_indx << " is invalid (at least one inter-plane angle is <= 80 degrees)" << endl;
         }
     }
     else
     {
-        cout << ">>> 帧 " << img_indx << " 为无效帧" << endl;
+        cout << ">>> Frame " << img_indx << " is invalid" << endl;
     }
     return ischoose;
 }

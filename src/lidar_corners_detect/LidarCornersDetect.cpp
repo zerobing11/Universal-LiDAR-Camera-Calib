@@ -1,6 +1,6 @@
 #include "LidarCornersDetect.h"
 #include <Eigen/Dense>
-//计算三平面交线交点
+// Compute intersection information for the three planes and their intersection lines.
 void LidarCornersDetect::ComputePlaneIntersectionInfo(const std::array<Eigen::Vector4f, 3>& planes,
                                        const std::array<std::pair<int, int>, 3>& lines_plane_pairs,
                                        Eigen::Vector3d& intersection_point) {
@@ -30,17 +30,15 @@ void LidarCornersDetect::ComputePlaneIntersectionInfo(const std::array<Eigen::Ve
 
     for(int i = 0; i < 3; i++)
     {
-        int plane_a = lines_plane_pairs[i].first;   // line_u 对应的另一个平面
-        int plane_b = lines_plane_pairs[i].second;  // line_v 对应的另一个平面
+        int plane_a = lines_plane_pairs[i].first;  
+        int plane_b = lines_plane_pairs[i].second; 
         
         LineEquation line_u, line_v;
 
-        // 计算line_u
         int third_plane_u = 3 - i - plane_a;
         Eigen::Vector3d n_third_u = planes[third_plane_u].head<3>().cast<double>();
         compute_line(planes[i], planes[plane_a], n_third_u, line_u);
 
-        // 计算line_v
         int third_plane_v = 3 - i - plane_b;
         Eigen::Vector3d n_third_v = planes[third_plane_v].head<3>().cast<double>();
         compute_line(planes[i], planes[plane_b], n_third_v, line_v);
@@ -75,7 +73,7 @@ void LidarCornersDetect::buildPlaneBasis(const Eigen::Vector4f& plane,
     basis.plane = plane;
     return;
 }
-//uv系转雷达系
+// Transform checkerboard points from (u, v) coordinates to the lidar frame.
 void LidarCornersDetect::transformCheckerBoardToLidarFrame(const PlaneBasis& basis, const std::vector<std::vector<Eigen::Vector2d>>& corners_uv, pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
     if (!cloud) {
         cloud.reset(new pcl::PointCloud<pcl::PointXYZI>());
@@ -85,7 +83,7 @@ void LidarCornersDetect::transformCheckerBoardToLidarFrame(const PlaneBasis& bas
     cloud->width = cols_;
     cloud->height = rows_;
     cloud->is_dense = true;
-    //先行后列
+    // Fill cloud row by row, then column by column.
     for (int r = 0; r < rows_; ++r) {
         for (int c = 0; c < cols_; ++c) {
             const auto& uv = corners_uv[r][c];
@@ -98,7 +96,7 @@ void LidarCornersDetect::transformCheckerBoardToLidarFrame(const PlaneBasis& bas
         }
     }
 }
-//计算雷达系下角点坐标
+// Compute checkerboard corner coordinates in the lidar frame.
 void LidarCornersDetect::calculateCornersSingleBoard(const PlaneBasis& basis, pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
     std::vector<std::vector<Eigen::Vector2d>> corners_uv(rows_, std::vector<Eigen::Vector2d>(cols_));
     double u0 = origin_corner_uv_.first;
@@ -106,7 +104,6 @@ void LidarCornersDetect::calculateCornersSingleBoard(const PlaneBasis& basis, pc
 
     for (int r = 0; r < rows_; ++r) {
         for (int c = 0; c < cols_; ++c) {
-            // 按照先行后列的顺序
             double u = u0 + c * square_len_;
             double v = v0 + r * square_len_;
             corners_uv[r][c] = Eigen::Vector2d(u, v);
@@ -130,7 +127,6 @@ void LidarCornersDetect::add(const std::array<Eigen::Vector4f, 3>& planes) {
         }
         board->clear();
     }
-    //计算交线、交点
     Eigen::Vector3d intersection_point;
     ComputePlaneIntersectionInfo(planes,
         lines_plane_pairs_,
@@ -139,14 +135,12 @@ void LidarCornersDetect::add(const std::array<Eigen::Vector4f, 3>& planes) {
 
     for (int i = 0; i < 3; ++i) {
         PlaneBasis basis;
-        //构建平面基准坐标系
         buildPlaneBasis(planes[i], 
                         line_equations_[i].first,
                         line_equations_[i].second,
                         intersection_point,
                         basis//out
                         );
-        //根据起始角点uv坐标和棋盘格尺寸计算所有角点uv，并转换为lidar坐标系
         pcl::PointCloud<pcl::PointXYZI>::Ptr board_cloud(new pcl::PointCloud<pcl::PointXYZI>());
         calculateCornersSingleBoard(basis, board_cloud);
         corners_three_boards[i] = board_cloud;

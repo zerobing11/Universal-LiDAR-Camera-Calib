@@ -11,15 +11,15 @@
 
 class OtusMuti {
 private:
-    //过滤后的点云
+
     std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> filtered_clouds_;
 
     void ClearFilteredClouds();
-    //计算大津法阈值    
+
     static bool ComputeOtsuThreshold(
         const pcl::PointCloud<pcl::PointXYZINormal>::ConstPtr &cloud,
         double &intensity_threshold);
-    //多级大津法
+        
     static bool ComputeMultiLevelOtsu(
         pcl::PointCloud<pcl::PointXYZINormal>::Ptr &working_cloud,
         double &intensity_threshold,

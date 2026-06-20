@@ -83,7 +83,7 @@ bool OtusMuti::ComputeMultiLevelOtsu(
     removed_points = 0;
     while (true) {
         iterations++;
-        //进行大津法
+        // Run Otsu thresholding on the current cloud.
         if (!ComputeOtsuThreshold(working_cloud, intensity_threshold)) {
             return false;
         }
@@ -106,11 +106,10 @@ bool OtusMuti::ComputeMultiLevelOtsu(
         }
         const size_t minority = std::min(high_idx.size(), low_idx.size());
         const double minority_ratio = static_cast<double>(minority) / static_cast<double>(total);
-        //看看当前次大津法二分结果是否符合比例要求
+        // Check whether the current binary partition satisfies the minimum ratio requirement.
         if (minority_ratio >= min_ratio) {
             return true;
         }
-        //不符合的话就删除小的那一部分，继续大津法
         const std::vector<int> &drop_idx = (high_idx.size() <= low_idx.size()) ? high_idx : low_idx;
         if (drop_idx.empty() || drop_idx.size() >= working_cloud->size()) {
             return false;
@@ -154,12 +153,11 @@ void OtusMuti::FilterClouds(
             new pcl::PointCloud<pcl::PointXYZINormal>(*input_clouds[i]));
         size_t iter_count = 0;
         size_t removed_points = 0;
-        // 每个平面多级大津法
+        // Apply multi-level Otsu filtering for each plane.
         bool ok = ComputeMultiLevelOtsu(working_cloud, threshold, min_ratio, iter_count, removed_points);
         if (!ok) {
             continue;
         }
-        //过滤
         for (const auto &pt: input_clouds[i]->points) {
             if (pt.intensity >= threshold) {
                 filtered_clouds_[i]->push_back(pt);
@@ -174,8 +172,8 @@ OtusMuti::OtusMuti() {
 void OtusMuti::add(
     const std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> &input_clouds,
     double min_ratio) {
-    ClearFilteredClouds();//清缓存
-    FilterClouds(input_clouds, min_ratio);//多级大津法过滤黑格点云
+    ClearFilteredClouds();
+    FilterClouds(input_clouds, min_ratio);
 }
 
 void OtusMuti::GetFilteredClouds(

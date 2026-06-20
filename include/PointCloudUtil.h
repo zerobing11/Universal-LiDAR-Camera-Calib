@@ -66,88 +66,10 @@ struct PlaneBasis {
 pcl::PointCloud<pcl::PointXYZI> Load_ply(const std::string &ply_file) {
     pcl::PointCloud<pcl::PointXYZI> cloud;
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
-    // 属性包含 x y z intensity
     if (pcl::io::loadPLYFile<pcl::PointXYZI>(ply_file, cloud) != 0) {
         std::cerr << "Failed to load PLY file: " << ply_file << std::endl;
     }
     return cloud;
-}
-
-// 读取txt点云（每行: x y z），返回PointXYZI点云
-// 读取txt点云（每行: x y z），返回PointXYZI点云
-pcl::PointCloud<pcl::PointXYZI>::Ptr LoadTxtPointCloud(
-    const std::string& txt_path)
-{
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>());
-    std::ifstream in(txt_path);
-    if (!in.is_open()) {
-        std::cerr << "Failed to open txt file: " << txt_path << std::endl;
-        return cloud;
-    }
-    std::string line;
-    cloud->points.reserve(1024);
-    while (std::getline(in, line)) {
-        if (line.empty())
-            continue;
-        std::istringstream iss(line);
-        double x, y, z;
-        if (!(iss >> x >> y >> z)) {
-            continue;
-        }
-        pcl::PointXYZI pt;
-        pt.x = static_cast<float>(x);
-        pt.y = static_cast<float>(y);
-        pt.z = static_cast<float>(z);
-        pt.intensity = 0.0f;
-        cloud->points.push_back(pt);
-    }
-    cloud->width = static_cast<uint32_t>(cloud->points.size());
-    cloud->height = 1;
-    cloud->is_dense = true;
-    return cloud;
-}
-
-// 读取txt角点（先行后列），返回[row][col]排列
-std::vector<std::vector<pcl::PointXYZI>> LoadTxtPointCloud(
-    const std::string& txt_path,
-    int row_count,
-    int col_count)
-{
-    std::vector<std::vector<pcl::PointXYZI>> corners;
-    if (row_count <= 0 || col_count <= 0) {
-        return corners;
-    }
-    corners.assign(static_cast<size_t>(row_count),
-                   std::vector<pcl::PointXYZI>(static_cast<size_t>(col_count)));
-
-    std::ifstream in(txt_path);
-    if (!in.is_open()) {
-        std::cerr << "Failed to open txt file: " << txt_path << std::endl;
-        return corners;
-    }
-
-    std::string line;
-    int idx = 0;
-    const int total = row_count * col_count;
-    while (idx < total && std::getline(in, line)) {
-        if (line.empty())
-            continue;
-        std::istringstream iss(line);
-        double x, y, z;
-        if (!(iss >> x >> y >> z)) {
-            continue;
-        }
-        const int r = idx / col_count;
-        const int c = idx % col_count;
-        pcl::PointXYZI pt;
-        pt.x = static_cast<float>(x);
-        pt.y = static_cast<float>(y);
-        pt.z = static_cast<float>(z);
-        pt.intensity = 0.0f;
-        corners[static_cast<size_t>(r)][static_cast<size_t>(c)] = pt;
-        ++idx;
-    }
-    return corners;
 }
 
 bool SavePLY(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloud,
@@ -223,7 +145,6 @@ std::vector<std::string> collectPlyFiles(const std::string &directory) {
     return files;
 }
 
-// 提取以 seed 为中心、半径为 extraction_radius 的球内点云
 pcl::PointCloud<pcl::PointXYZI>::Ptr ExtractSpherePoints(
     const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud,
     const pcl::PointXYZ& seed,
@@ -258,17 +179,15 @@ void CheckBoardPlane(std::array<Eigen::Vector4f, 3> &p) {
         Eigen::Vector4f p2 = p[1];
         Eigen::Vector4f p3 = p[2];
 
-        // 计算法向量点积
         float dot12 = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
         float dot13 = p1[0] * p3[0] + p1[1] * p3[1] + p1[2] * p3[2];
         float dot23 = p2[0] * p3[0] + p2[1] * p3[1] + p2[2] * p3[2];
-        // 转换为角度（度）
         float angle12 = acos(abs(dot12)) * 180.0 / M_PI;
         float angle13 = acos(abs(dot13)) * 180.0 / M_PI;
         float angle23 = acos(abs(dot23)) * 180.0 / M_PI;
-        std::cout << "angle_plane12: " << angle12 << "°" << std::endl;
-        std::cout << "angle_plane13: " << angle13 << "°" << std::endl;
-        std::cout << "angle_plane23: " << angle23 << "°" << std::endl;
+        // std::cout << "angle_plane12: " << angle12 << "°" << std::endl;
+        // std::cout << "angle_plane13: " << angle13 << "°" << std::endl;
+        // std::cout << "angle_plane23: " << angle23 << "°" << std::endl;
     }
 }
 
@@ -294,7 +213,6 @@ void publishPointCloud(const pcl::PointCloud<pcl::PointXYZINormal>::ConstPtr &cl
     publisher.publish(msg);
 }
 
-// 相机系3D点通过外参变换到雷达系点云
 void transformCam3dToLidar3d(const std::vector<cv::Point3f>& cam_points,
                              const Eigen::Matrix3d& Rcl,
                              const Eigen::Vector3d& tcl,
@@ -335,7 +253,6 @@ void waitForEnter(const std::string &prompt, bool enable_wait) {
     std::getline(std::cin, dummy);
 }
 
-// 连续发布，直到用户回车；若不等待则仅发布一次
 void publishUntilEnter(const std::function<void()> &publish_fn,
                        const std::string &prompt,
                        bool enable_wait,
@@ -361,7 +278,6 @@ void publishUntilEnter(const std::function<void()> &publish_fn,
         th.join();
 }
 
-// 按平面最近距离给点云着色并发布
 bool classifyAndPublish(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
                         const std::vector<Eigen::Vector4f>& planes,
                         const ros::Publisher& publisher,
@@ -395,7 +311,7 @@ bool classifyAndPublish(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
     waitForEnter(prompt, wait_enter);
     return true;
 }
-//点云投影
+
 void projectPointToPlane(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
                          const Eigen::Vector4f& plane,
                          pcl::PointCloud<pcl::PointXYZINormal>::Ptr& projected_cloud)
@@ -411,9 +327,9 @@ void projectPointToPlane(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud
         const double denom = plane[0] * pt.x + plane[1] * pt.y + plane[2] * pt.z;
         if (std::abs(denom) < 1e-10)
         {
-            continue; // 射线与平面近似平行
+            continue; 
         }
-        const double t = -static_cast<double>(plane[3]) / denom; // t 可正可负，代表平面前/后
+        const double t = -static_cast<double>(plane[3]) / denom; 
         pcl::PointXYZINormal projected;
         projected.x = static_cast<float>(t * pt.x);
         projected.y = static_cast<float>(t * pt.y);
@@ -429,67 +345,6 @@ void projectPointToPlane(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud
     projected_cloud->height = 1;
 }
 
-
-// 基于迭代的RANSAC平面拟合
-void IterativeRansacDetection(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &points_for_fitting,
-                              float kThresholdDecrement,
-                              float ransac_threshold,
-                              Eigen::Vector4f &final_plane_model,
-                              int min_points = 100,
-                              int max_iterations = 10
-) {
-    float current_threshold = ransac_threshold;
-    int iteration = 0;
-
-    pcl::PointCloud<pcl::PointXYZINormal>::Ptr working_cloud = points_for_fitting;
-
-    while (true) {
-        iteration++;
-        if (iteration > max_iterations) {
-            // cout << "reached max iterations " << max_iterations << ", stop" << endl;
-            break;
-        }
-        if (current_threshold <= 0.0f) {
-            cout << "RANSAC threshold <= 0, stop" << endl;
-            break;
-        }
-        // cout << "Iteration " << iteration << ": " << working_cloud->size() << " pts" << endl;
-
-        pcl::SampleConsensusModelPlane<pcl::PointXYZINormal>::Ptr model(
-            new pcl::SampleConsensusModelPlane<pcl::PointXYZINormal>(working_cloud));
-        pcl::RandomSampleConsensus<pcl::PointXYZINormal> ransac(model);
-        ransac.setDistanceThreshold(current_threshold);
-        if (!ransac.computeModel()) {
-            cout << "RANSAC failed to compute model" << endl;
-        }
-        Eigen::VectorXf coeffs;
-        ransac.getModelCoefficients(coeffs);
-        final_plane_model = Eigen::Vector4f(coeffs(0), coeffs(1), coeffs(2), coeffs(3));
-        if (final_plane_model[3] < 0) {
-            final_plane_model = final_plane_model * -1.0f;
-        }
-
-        std::vector<int> inliers;
-        ransac.getInliers(inliers);
-
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr inlier_cloud(new pcl::PointCloud<pcl::PointXYZINormal>());
-        inlier_cloud->reserve(inliers.size());
-        for (int idx: inliers) {
-            if (idx >= 0 && idx < static_cast<int>(working_cloud->size())) {
-                inlier_cloud->push_back(working_cloud->points[idx]);
-            }
-
-        }
-        if (inlier_cloud->size() < static_cast<size_t>(min_points)) {
-            cout << "Inliers fewer than " << min_points << ", stop iterations" << endl;
-            break;
-        }
-        working_cloud = inlier_cloud;
-        current_threshold = std::max(0.005f, current_threshold - kThresholdDecrement);
-    }
-
-    return;
-}
 
 std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> FilterCloudByLines(
     const std::vector<std::pair<LineEquation, LineEquation>>& line_equations,
@@ -521,9 +376,7 @@ std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> FilterCloudByLines(
         for (const auto& pt : plane_clouds[i]->points) {
             Eigen::Vector3d p(pt.x, pt.y, pt.z);
 
-            // 到直线1的距离
             double d1 = ((p - p1).cross(dir1)).norm();
-            // 到直线2的距离
             double d2 = ((p - p2).cross(dir2)).norm();
 
             // 移除交线半径内的点（圆柱体剔除）
@@ -569,7 +422,6 @@ std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3> FilterCloudByLines(
     return filtered_clouds;
 }
 
-// 对点云进行体素降采样
 void voxelDownsample(const pcl::PointCloud<pcl::PointXYZI>::Ptr& input_cloud,
                      float leaf_size,
                      pcl::PointCloud<pcl::PointXYZI>::Ptr& output_cloud)
@@ -588,7 +440,6 @@ void voxelDownsample(const pcl::PointCloud<pcl::PointXYZI>::Ptr& input_cloud,
     output_cloud->height = 1;
 }
 
-// 对点云进行体素降采样
 void voxelDownsample(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr& input_cloud,
                      float leaf_size,
                      pcl::PointCloud<pcl::PointXYZINormal>::Ptr& output_cloud)
@@ -607,7 +458,6 @@ void voxelDownsample(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr& input_clo
     output_cloud->height = 1;
 }
 
-// 对3个平面点云进行体素降采样
 void voxelDownsample(const std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3>& input_clouds,
                      float leaf_size,
                      std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3>& output_clouds)
@@ -617,7 +467,6 @@ void voxelDownsample(const std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr
     }
 }
 
-// 将3个平面点云分别设置为不同强度
 void setPlaneIntensity(std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3>& plane_clouds,
                        const std::array<float, 3>& intensities = {0.0f, 40.0f, 80.0f})
 {
@@ -631,51 +480,12 @@ void setPlaneIntensity(std::array<pcl::PointCloud<pcl::PointXYZINormal>::Ptr, 3>
     }
 }
 
-// 基于RANSAC拟合平面
-bool RansacPlane(const pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
-                    float distance_threshold,
-                    Eigen::Vector4f& plane_out)
-{
-    plane_out = Eigen::Vector4f::Zero();
-    if (!cloud || cloud->size() < 3) {
-        return false;
-    }
-    if (distance_threshold <= 0.0f) {
-        return false;
-    }
 
-    pcl::SampleConsensusModelPlane<pcl::PointXYZINormal>::Ptr model(
-        new pcl::SampleConsensusModelPlane<pcl::PointXYZINormal>(cloud));
-    pcl::RandomSampleConsensus<pcl::PointXYZINormal> ransac(model);
-    ransac.setDistanceThreshold(distance_threshold);
-    if (!ransac.computeModel()) {
-        return false;
-    }
-
-    Eigen::VectorXf coeffs;
-    ransac.getModelCoefficients(coeffs);
-    if (coeffs.size() < 4) {
-        return false;
-    }
-    plane_out = Eigen::Vector4f(coeffs(0), coeffs(1), coeffs(2), coeffs(3));
-    float norm = plane_out.head<3>().norm();
-    if (norm < 1e-9f) {
-        return false;
-    }
-    plane_out /= norm;
-    if (plane_out[3] < 0.0f) {
-        plane_out = -plane_out;
-    }
-    return true;
-}
-
-//三点拟合平面
 bool ComputePlaneFromPoints(const Eigen::Vector3d& p1,
                             const Eigen::Vector3d& p2,
                             const Eigen::Vector3d& p3,
                             Eigen::Vector4d& plane_out)
 {
-    // 由三点求平面并单位化法向
     Eigen::Vector3d v1 = p2 - p1;
     Eigen::Vector3d v2 = p3 - p1;
     Eigen::Vector3d n = v1.cross(v2);
@@ -690,19 +500,17 @@ bool ComputePlaneFromPoints(const Eigen::Vector3d& p1,
     plane_out[3] = d;
     return true;
 }
-//计算点到面距离
+
 double SignedDistanceToPlane(const Eigen::Vector4d& plane,
                              const Eigen::Vector3d& p)
 {
-    // plane 已单位化
     return plane.head<3>().dot(p) + plane[3];
 }
 
-//高斯混合模型拟合平面
 struct MlesacResult
 {
-    Eigen::Vector4f plane;  // 单位法向 + 偏置
-    double score = 0.0;     // 0-100
+    Eigen::Vector4f plane;
+    double score = 0.0;
     bool success = false;
 };
 MlesacResult RunPlaneMlesac(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
@@ -738,7 +546,6 @@ MlesacResult RunPlaneMlesac(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
 
     for(int iter=0; iter<max_iterations; ++iter)
     {
-        // 随机采样三点生成候选平面
         auto idx = sample_unique(3);
         Eigen::Vector4d plane;
         Eigen::Vector3d p1(cloud->points[idx[0]].x, cloud->points[idx[0]].y, cloud->points[idx[0]].z);
@@ -772,12 +579,10 @@ MlesacResult RunPlaneMlesac(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
         return result;
     }
 
-    // 确保平面朝向为正
     if (best_plane[3] < 0.0) {
         best_plane = -best_plane;
     }
 
-    // 质量评分
     double accum = 0.0;
     for(const auto& pt : cloud->points)
     {
@@ -791,7 +596,6 @@ MlesacResult RunPlaneMlesac(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud,
     result.score = score;
     result.success = true;
 
-    // 原地过滤：仅保留到最佳平面距离 <= sigma 的点
     auto& pts = cloud->points;
     pts.erase(
         std::remove_if(pts.begin(), pts.end(),

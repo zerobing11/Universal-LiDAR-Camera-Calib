@@ -11,8 +11,6 @@ Setting:
   checker_col: 5
   square_len: 0.2
   lines_plane_pairs: [[2, 1], [2, 0], [0, 1]]
-  otsu: false
+  otsu: true
   extract_ground: false
   enable_joint_optimize: false
-  #  true
-  

@@ -6,14 +6,7 @@
 #include <vector>
 #include<iostream>
 using namespace std;
-//content是输入的需要处理的字符串
-//start是截取字符串的开始,如果是空字符则认为从字符串的开始截取
-//end是截取字符串的结束,如果是空字符则认为是字符串结束停止截取
-//spos是截取start字符串后向后移动几个字符开始截取
-//epos是截取end字符串后向后移动几个字符结束截取
-//例如:substr_start_end("loveSEU","o","E") = "oveS"
-//substr_start_end("loveSEU","",E) = "loveS";
-//substr_start_end("loveSEU,"o","E",1,0) = "veS"
+
 string substr_start_end(const string content,const string start,string end="",int spos=0,int epos=0)
 {
   int n_end,n_start;
@@ -71,9 +64,7 @@ string substr_start_from(const std::string content,const int from,const std::str
   
 }
 
-//这个函数能够读取一行中用空格分隔的数字
-//例如有一串字符"F:1 2 3 4",想要把1 2 3 4提取出来,这时就需要输入如下函数:
-//read_sapce_string("F:1 2 3 4"," ",1)
+
 vector<float> read_sapce_string(const std::string content,string s,int start)
 {
   vector<float> result;
@@ -135,8 +126,7 @@ int locate_repeat(const std::string content,string s,int num)
   return glboal_locate+num-1;
 }
 
-//将字符分隔开假设我们输入的是 "{1,1,1,} {2,3,4} {4,6,7}"
-//第2个参数是{ 第三个参数是} 第四个参数是" "
+
 vector<string> read_format(string content,string s)
 {
   int l=0;
