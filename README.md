@@ -1,2 +1,2 @@
 # Universal-LiDAR-Camera-Calib
-The full implementation and dataset will be released upon acceptance.
+The sample datasets and source code have been uploaded, and detailed usage instructions will be updated shortly.
