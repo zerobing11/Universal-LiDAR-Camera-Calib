@@ -10,6 +10,7 @@ Setting:
   checker_row: 5
   checker_col: 5
   square_len: 0.2
+  beam_divergence_deg: 0.155
   lines_plane_pairs: [[2, 1], [2, 0], [0, 1]]
   otsu: true
   extract_ground: false

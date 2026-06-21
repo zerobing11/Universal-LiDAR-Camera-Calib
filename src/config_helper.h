@@ -17,6 +17,7 @@ public:
     static int checker_row;
     static int checker_col;
     static std::vector<std::vector<int>> lines_plane_pairs;
+    static double beam_divergence_deg;
     static bool otsu;
     static bool extract_ground;
     static bool enable_joint_optimize;

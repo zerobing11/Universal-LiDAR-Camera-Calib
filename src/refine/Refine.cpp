@@ -187,8 +187,8 @@ void Refine::alignCorners(PlaneBasis& basis,
     transformCheckerBoardToLidarFrame(basis, corners_uv, corners);
 }
 
-Refine::Refine(int rows, int cols, double square_len, const std::pair<double, double>& origin_corner_uv, const std::array<std::pair<int, int>, 3>& lines_plane_pairs)
-    : rows_(rows), cols_(cols), square_len_(square_len), origin_corner_uv_(origin_corner_uv), lines_plane_pairs_(lines_plane_pairs) {
+Refine::Refine(int rows, int cols, double square_len, const std::pair<double, double>& origin_corner_uv, const std::array<std::pair<int, int>, 3>& lines_plane_pairs, double beam_divergence_deg)
+    : rows_(rows), cols_(cols), square_len_(square_len), beam_divergence_deg_(beam_divergence_deg), origin_corner_uv_(origin_corner_uv), lines_plane_pairs_(lines_plane_pairs) {
     for (auto& board : perfect_checkerboards) {
         board.resize(rows_, cols_);
     }
@@ -350,7 +350,7 @@ void Refine::add(const std::array<Eigen::Vector4f, 3>& planes,
         growCorners(perfect_checkerboards[i]);
         computeCellCentroids(perfect_checkerboards[i]);
         computeCellColors(clouds[i], perfect_checkerboards[i]);
-        computeAngleRadiusAndFilter(clouds[i],planes[i],0.15,70);
+        computeAngleRadiusAndFilter(clouds[i],planes[i],beam_divergence_deg_,70);
         perfect_checkerboards[i].basis.origin = {perfect_checkerboards[i].corners_growth[0][0].x,perfect_checkerboards[i].corners_growth[0][0].y, perfect_checkerboards[i].corners_growth[0][0].z};
 
     }
@@ -413,7 +413,7 @@ LMResult Refine::OptimizePlanePose(const std::array<pcl::PointCloud<pcl::PointXY
     LMResult result;
 
     double r_vec[3], t_vec[3];
-    double k_val = 3;
+    double k_val = 1;
     Eigen::AngleAxisd aa(R0);
     Eigen::Vector3d rv = aa.angle() * aa.axis();
     r_vec[0] = rv(0); r_vec[1] = rv(1); r_vec[2] = rv(2);

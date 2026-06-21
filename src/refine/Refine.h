@@ -200,6 +200,7 @@ private:
     int rows_;
     int cols_;
     double square_len_;
+    double beam_divergence_deg_;
     std::array<PerfectCheckerBoard,3> perfect_checkerboards;
     std::pair<double, double> origin_corner_uv_;
     std::array<std::pair<int, int>, 3> lines_plane_pairs_;
@@ -242,7 +243,7 @@ private:
     void computeInverseTransform(const std::array<Eigen::Vector4f, 3>& planes);
 
 public:
-    Refine(int rows, int cols, double square_len, const std::pair<double, double>& origin_corner_uv, const std::array<std::pair<int, int>, 3>& lines_plane_pairs);
+    Refine(int rows, int cols, double square_len, const std::pair<double, double>& origin_corner_uv, const std::array<std::pair<int, int>, 3>& lines_plane_pairs, double beam_divergence_deg = 0.155);
 
     void add(const std::array<Eigen::Vector4f, 3>& planes,
              const pcl::PointCloud<pcl::PointXYZI>::Ptr& corners_cam2lidar,

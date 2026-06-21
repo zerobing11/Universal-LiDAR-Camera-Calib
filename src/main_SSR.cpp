@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
     bool extract_ground = MSRConfig::extract_ground;
     bool enable_joint_optimize = MSRConfig::enable_joint_optimize;
     float square_len = static_cast<float>(MSRConfig::square_len);
+    double beam_divergence_deg = MSRConfig::beam_divergence_deg;
     std::pair<double, double> origin_corner_uv = {MSRConfig::origin_corner_uv[0] + square_len, MSRConfig::origin_corner_uv[1] + square_len};
     cv::Mat predefined_intrinsic, predefined_distortion;
     if (MSRConfig::predefined_intrinsic.size() == 9) {
@@ -122,7 +123,7 @@ int main(int argc, char **argv) {
     OtusMuti otus_muti;
     LidarCornersDetect lidar_corners_detect(checker_corner_row, checker_corner_col, square_len,origin_corner_uv, lines_plane_pairs);
     Coarse2Fine coarse_2_fine;
-    Refine refine(checker_corner_row, checker_corner_col, square_len, origin_corner_uv, lines_plane_pairs);
+    Refine refine(checker_corner_row, checker_corner_col, square_len, origin_corner_uv, lines_plane_pairs, beam_divergence_deg);
 
     auto init_extrinsic_file = [](const std::string& path) {
         const std::string dir = FileIO::GetParentDir(path);

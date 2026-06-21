@@ -24,6 +24,7 @@ bool MSRConfig::use_roi = false;
 bool MSRConfig::wait_enter = false;
 double MSRConfig::dist_range = 3.4;
 std::vector<std::vector<int>> MSRConfig::lines_plane_pairs = {{2, 0}, {1, 0}, {2, 1}};
+double MSRConfig::beam_divergence_deg = 0.155;
 
 double AlgorithmParamConfig::corner_detect_threshold = 0.15;
 double AlgorithmParamConfig::chessboard_threshold = 0.8;
@@ -82,6 +83,9 @@ void LoadMSRConfig(const std::string& yaml_path)
         }
         if (docs_checker["lines_plane_pairs"]) {
             MSRConfig::lines_plane_pairs = docs_checker["lines_plane_pairs"].as<std::vector<std::vector<int>>>();
+        }
+        if (docs_checker["beam_divergence_deg"]) {
+            MSRConfig::beam_divergence_deg = docs_checker["beam_divergence_deg"].as<double>();
         }
     }
 }
