@@ -8,7 +8,7 @@ We provide a universal and automated extrinsic calibration framework via a 3D ch
 
 ## Overview
 
-The proposed framework extracts and sorts 3D checkerboard features from LiDAR point clouds and 2D checkerboard corners from camera images, estimates an initial transformation, and refines the extrinsic calibration through geometric optimization and laser spot modeling.
+This is a progressive tri-level refinement framework. In the first stage, point cloud and image features are extracted and ranked for initial solution estimation. The second and third stages then optimize the extrinsic parameters using a camera-guided geometry model and a laser spot model. The first two levels of this framework are applicable to repetitive scanning LiDAR (RSL), while the complete tri-level framework is applicable to non-repetitive scanning LiDAR (NRSL).
 
 ![Overview](result/overview.png)
 
@@ -16,13 +16,9 @@ The proposed framework extracts and sorts 3D checkerboard features from LiDAR po
 
 ### Repetitive Scanning LiDAR
 
-Example projection/coloring result for repetitive scanning LiDAR calibration:
-
 ![MSR Result](result/MSR/project2.png)
 
 ### Non-Repetitive Scanning LiDAR
-
-Example projection/coloring result for non-repetitive scanning LiDAR calibration:
 
 ![SSR Result](result/SSR/coloring3.png)
 
